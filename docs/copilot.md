@@ -34,7 +34,7 @@ Use **Chat: Open Customizations** to see everything VS Code loaded. Right-click 
 | `/kb-select` | choose KB threads, raise questions |
 | `/kb-format` | converted thread → clean `raw/` source |
 | `/kb-images` | describe images (vision on) |
-| `/kb-svg` | SVG → Mermaid or description (no vision needed) |
+| `/kb-svg` | SVGs kbmail could not convert itself → Mermaid or description, from text digests (no vision needed) |
 | `/kb-wiki-ingest` | delta ingest into the wiki per `SCHEMA.md` |
 | `/kb-wiki-lint` | self-healing: links, stale pages, contradictions, duplicates |
 | `/kb-ask` | answer from the wiki with citations; crystallize good answers |
@@ -65,9 +65,20 @@ Set `copilot.vision` in `kbmail.yaml` (or `KBMAIL_COPILOT__VISION`).
   write descriptions in `descriptions.yaml` (or `kbmail images describe`), then run
   `kbmail images import`. Mark irrelevant ones with `skip: true`.
 * **On:** `/kb-images` lets Copilot fill the same YAML.
-* **SVG either way:** SVGs are XML, so Copilot reads them as text. `/kb-svg` writes Mermaid
-  (`review/images/<id>.mmd`) for flows, architectures, sequences, org charts and timelines, which is
-  easier for an LLM to use later than a picture. Otherwise it writes a description.
+* **SVG either way, without vision:**
+  1. `kbmail` converts what it can itself (`kbmail/svg2mermaid.py`). draw.io/diagrams.net exports
+     carry their compressed diagram model, which is unpacked and converted exactly. Simple
+     box-and-arrow drawings (boxes with text, connectors whose ends touch boxes, arrow markers or
+     arrowhead shapes) are converted from their geometry. Icons are skipped. SVGs that only wrap a
+     PNG/JPEG have the image extracted, and it goes through the normal image flow.
+  2. For everything else (charts, tables, dense drawings), kbmail writes a **digest**
+     `review/images/<id>.svg.md`: texts in reading order, shapes with coordinates and their text,
+     connectors and what they touch, embedded images, and a draft Mermaid. `/kb-svg` works from the
+     digest, never from the raw SVG. Raw SVGs can be huge or minified, and with vision disabled they
+     may be treated as images, so Copilot can't use them.
+  3. Results land in `review/images/<id>.mmd` (Mermaid) or the YAML description. Mermaid is easier
+     for an LLM to use later than a picture. `kbmail svg2mermaid <file> [--digest]` runs the same
+     converter on any file; exit code 3 means too complex.
 
 Threads wait in the format queue until all their images are described, skipped or converted, so the
 knowledge base never contains silent "[image]" holes.

@@ -19,7 +19,8 @@ def collect(ws: Workspace) -> dict:
     sel_results = [n for n, b in sel_batches.items() if ws.path(b["result"]).exists()]
     rules_due, rules_why = rules.due(ws)
     img = images.counts(ws)
-    img_pending = sum(v for k, v in img.items() if k.endswith(":pending"))
+    img_pending = img.get("image:pending", 0)
+    svg_pending = img.get("svg:pending", 0)
     q = questions.counts(ws)
     kbs = kb.status(ws)
     conv = ws.load_json(kb.CONVERTED, {})
@@ -41,6 +42,7 @@ def collect(ws: Workspace) -> dict:
         "unformatted_threads": unformatted,
         "images": img,
         "images_pending": img_pending,
+        "svg_pending": svg_pending,
         "questions": q,
         "wiki": wq,
         "last_runs": runs,
@@ -74,13 +76,15 @@ def next_actions(ws: Workspace, s: dict) -> list[str]:
         out.append("Import KB selection: `kbmail kb import`.")
     elif s["kb_select_open"]:
         out.append(f"Copilot: run `/kb-select` ({s['kb_select_open']} batch(es) in work/kb_select/).")
+    if s["svg_pending"]:
+        out.append(f"Copilot: run `/kb-svg` ({s['svg_pending']} SVG(s) too complex for automatic Mermaid conversion).")
     if s["images_pending"]:
         who = (
             "Copilot `/kb-images`"
             if ws.cfg("copilot.vision")
             else "you: review/images/REVIEW.md + `kbmail images import`"
         )
-        out.append(f"{s['images_pending']} image(s) need descriptions ({who}). SVGs: `/kb-svg`.")
+        out.append(f"{s['images_pending']} image(s) need descriptions ({who}).")
     if s["questions"].get("open"):
         out.append(
             f"{s['questions']['open']} open question(s) in review/questions.yaml: "
@@ -111,8 +115,8 @@ def hook_context(ws: Workspace) -> str:
         f"- messages {s['messages']}, calendar events {s['calendar_events']}, unlabeled {s['unlabeled']}, "
         f"labels {s['labels'] or '-'}",
         f"- rules: {'refresh DUE, ' if s['rules_due'] else ''}{s['rules_why']}",
-        f"- KB: {s['kb']}; unformatted threads {s['unformatted_threads']}; images pending {s['images_pending']}; "
-        f"questions {s['questions'] or '-'}",
+        f"- KB: {s['kb']}; unformatted threads {s['unformatted_threads']}; images pending {s['images_pending']}, "
+        f"SVGs for /kb-svg {s['svg_pending']}; questions {s['questions'] or '-'}",
         f"- wiki: {s['wiki']}",
         f"- copilot.vision: {str(bool(ws.cfg('copilot.vision'))).lower()}",
         "Next actions (in order):",

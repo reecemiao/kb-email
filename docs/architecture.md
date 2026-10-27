@@ -126,7 +126,11 @@ support ≥ 3 and purity ≥ 0.8 among confirmed labels.
 For each selected thread: HTML body → Markdown (markitdown); quoted history stripped from all but the
 first message (English and Japanese reply headers); attachments converted with markitdown (docx, pptx,
 xlsx, pdf, msg, html, ...); images inside docx/pptx/xlsx are extracted from the zip media folder;
-images and SVGs are registered and replaced by markers; secrets are redacted (`privacy.*`).
+images and SVGs are registered and replaced by markers; secrets are redacted (`privacy.*`). Pending
+SVGs then go through `svg2mermaid`, which tries three things in order: the draw.io model when present
+(exact), then geometry for simple diagrams, and otherwise a digest for Copilot. `.svgz` is
+decompressed. Embedded `data:` images are extracted into the image registry, and an SVG counts as
+resolved only when those are too.
 `thread.md` is re-rendered whenever image descriptions change. A thread is "formatted" when its raw
 file's front matter carries the current `source_version`.
 

@@ -196,8 +196,31 @@ def cmd_images(args):
         write_queue(ws)
     elif args.action == "review":
         print(images.write_review_files(ws, images.load(ws)))
+    elif args.action == "svg":
+        reg = images.load(ws)
+        images.process_svgs(ws, reg, force=args.force)
+        images.save(ws, reg)
+        images.write_review_files(ws, reg)
+        from kbmail.kb import write_queue
+
+        write_queue(ws)
     else:
         print(images.counts(ws))
+
+
+def cmd_svg2mermaid(args):
+    """Exit code 0 = converted, 3 = too complex (digest written instead)."""
+    from kbmail.svg2mermaid import convert
+
+    path = Path(args.file)
+    res = convert(path.read_bytes(), path.name)
+    text = res.digest if (args.digest or not res.is_simple) else res.mermaid + "\n"
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+    else:
+        print(text, end="")
+    print(f"{res.kind}: {res.summary}", file=sys.stderr)
+    return 0 if res.is_simple else 3
 
 
 def cmd_questions(args):
@@ -425,8 +448,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_kb)
 
     s = sub.add_parser("images", help="image descriptions (vision-off workflow)")
-    s.add_argument("action", choices=["status", "review", "describe", "import"])
+    s.add_argument("action", choices=["status", "review", "describe", "import", "svg"])
+    s.add_argument("--force", action="store_true", help="(svg) redo automatic SVG results too")
     s.set_defaults(func=cmd_images)
+
+    s = sub.add_parser("svg2mermaid", help="convert one SVG (or .svgz) to Mermaid, or print a digest for Copilot")
+    s.add_argument("file")
+    s.add_argument("-o", "--output", help="write the Mermaid (or, if complex, the digest) here instead of stdout")
+    s.add_argument("--digest", action="store_true", help="print the text digest even when conversion succeeds")
+    s.set_defaults(func=cmd_svg2mermaid)
 
     s = sub.add_parser("questions", help="questions for the user (unknown terms, missing links)")
     s.add_argument("action", choices=["list", "add", "answer", "ingest"])

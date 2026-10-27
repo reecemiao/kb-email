@@ -59,6 +59,8 @@ any command for details.
 | `kbmail kb convert [--force]` | markitdown conversion + images + redaction into `work/convert/` |
 | `kbmail kb queue` / `kbmail kb status` | refresh `work/convert/QUEUE.md` / counts |
 | `kbmail images status\|review\|describe\|import` | image descriptions workflow (`review/images/`) |
+| `kbmail images svg [--force]` | auto-convert pending SVGs (simple diagrams → `.mmd`, icons skipped, complex → `<id>.svg.md` digest) |
+| `kbmail svg2mermaid <file.svg> [-o out] [--digest]` | convert one SVG/.svgz; exit 0 = Mermaid, 3 = too complex (prints the digest) |
 | `kbmail questions list [--all]` | open questions |
 | `kbmail questions add "<question>" --context "<where>" --step <skill>` | record something you could not understand |
 | `kbmail questions answer` / `kbmail questions ingest [--no-fetch]` | user answers / turn answers into `raw/notes/` (+ fetch links into `raw/web/`) |

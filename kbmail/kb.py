@@ -342,6 +342,7 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
             "formatted": False,
         }
         stats["converted"] += 1
+    imgs.process_svgs(ws, reg, log=log)
     imgs.save(ws, reg)
     imgs.write_review_files(ws, reg)
     ws.save_json(CONVERTED, conv)

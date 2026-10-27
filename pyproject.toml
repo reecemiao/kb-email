@@ -70,6 +70,7 @@ ignore = [
 "kbmail/outlook.py" = ["B023"]
 "kbmail/teams.py" = ["B023"]
 "tests/**" = ["E731"]  # `quiet = lambda ...` log sinks
+"tests/test_svg2mermaid.py" = ["E731", "E501"]  # SVG/XML fixtures are kept as written
 
 [tool.ruff.format]
 line-ending = "lf"

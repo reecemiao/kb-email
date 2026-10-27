@@ -1,0 +1,4 @@
+# This workspace holds private mail. If you version it with git, keep the remote private.
+state/msal_cache.bin
+state/*.tmp
+**/~$*

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kbmail"
+version = "0.1.0"
+description = "Export Outlook mail/calendar (and Teams chats), label them by area, and grow an LLM wiki knowledge base with GitHub Copilot in VS Code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "PyYAML>=6.0",
+    "markitdown[docx,pptx,xlsx,pdf,outlook]>=0.1.0",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+teams = ["msal>=1.28", "requests>=2.31"]
+dev = ["pytest>=8", "python-docx>=1.1"]
+
+[project.scripts]
+kbmail = "kbmail.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kbmail*"]
+
+[tool.setuptools.package-data]
+kbmail = ["templates/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

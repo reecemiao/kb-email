@@ -1,0 +1,67 @@
+# kbmail workspace configuration. Every key is optional; defaults are shown.
+
+me:
+  name: ""                 # your display name (used in drafts)
+  emails: []               # ALL your SMTP addresses, e.g. [taro.yamada@contoso.com]
+
+# The areas you want mail sorted into. Everything else becomes "others".
+# A good description + keywords make Copilot's first labeling pass much better.
+areas:
+  - name: area1
+    description: "Replace with a one-line description of this area"
+    keywords: []
+  - name: area2
+    description: "Another area"
+    keywords: []
+
+outlook:
+  days: 30                 # first export window; later runs are deltas
+  folders: [inbox, sent]   # default: Inbox + Sent Items only (--all-folders for everything)
+  include_subfolders: false  # default: skip subfolders (--include-subfolders)
+  extra_folders: []        # e.g. ["Inbox/Projects", "\\\\Online Archive - me@contoso.com\\Inbox"]
+  calendar: true
+  calendar_future_days: 14
+  save_html: true          # keeps tables/inline images for the KB conversion step
+  save_attachments: true
+  attachment_max_mb: 25
+  overlap_hours: 24        # delta re-reads this much before the last watermark (de-duplicated)
+
+labeling:
+  batch_size: 40           # messages per Copilot labeling batch
+  preview_chars: 700
+  rule_threshold: 2.0      # default threshold if rules.yaml doesn't set one
+
+rules:
+  refresh_every_days: 14           # rules refresh is "due" after this many days...
+  refresh_after_new_confirmed: 50  # ...or after this many newly confirmed labels
+
+kb:
+  include_auto_labels: true  # rule-labeled (not reviewed) mail can feed the KB
+  message_chars: 6000
+
+copilot:
+  vision: false            # true if Copilot in your VS Code may look at images
+
+images:
+  min_bytes: 6000          # ignore smaller images (logos, signature icons)
+
+privacy:
+  redact: true             # strip passwords/tokens/keys before raw/ and wiki/
+  extra_patterns: []       # extra regexes to redact, e.g. ["\\bPRJ-SECRET-\\d+\\b"]
+
+people:
+  top_n: 80
+
+triage:
+  days: 14
+  follow_up_after_days: 3
+
+wiki:
+  half_life_days: {fast: 30, normal: 180, slow: 730}
+  stale_below: 0.35
+
+teams:
+  tenant: organizations    # or your tenant id / domain
+  client_id: ""            # Entra ID app (public client) allowed to use Chat.Read - see docs/teams.md
+  days: 30
+  token_cache: state/msal_cache.bin

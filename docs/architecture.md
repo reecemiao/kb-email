@@ -1,0 +1,145 @@
+# Architecture
+
+## Principles
+
+1. **Split by capability.** Python does what must be exact and repeatable: COM export, IDs, dedup,
+   watermarks, diffs, validation, scoring, redaction. Copilot does what needs language understanding:
+   labeling, rule authoring, selection, formatting, wiki compilation, drafting.
+2. **File contracts between them.** Every Copilot step reads a generated Markdown work file and writes
+   a result in a fixed format (JSON Lines, YAML, or Markdown with required front matter). kbmail
+   validates and imports it. Bad lines are reported and the items go back to the queue. Nothing
+   depends on a particular LLM API, so the same contracts work with Copilot Chat, Copilot CLI, or any
+   other agent.
+3. **Deltas everywhere.** Each stage keeps its own state, so a rerun only touches new or changed items.
+4. **Human in the loop where it matters.** Label confirmation, image descriptions without vision,
+   answers to open questions, relationship overrides.
+5. **Private data stays in the workspace.** The tool repo holds no data. The workspace holds data,
+   state and the prompt files.
+
+## Workspace layout
+
+```
+kbmail.yaml                 configuration (areas, me, export defaults, vision, privacy, teams)
+config/
+  rules.yaml                labeling rules (Copilot-written, kbmail-validated)
+  rules_journal.md          conclusions of every rules refresh (read at the next refresh)
+  people.yaml               relationship overrides / aliases / ignore list
+data/                       kbmail-owned exports (read-only for Copilot)
+  messages/outlook/YYYY-MM/<YYYYMMDD-HHMM>_<id>.md     one message, YAML front matter + body
+  messages/outlook/YYYY-MM/<id>_files/                 attachments + body.html
+  messages/teams/YYYY-MM/...                           one record per chat per day
+  messages/teams/_raw/<chat>/<day>.json                merged raw chat messages
+  calendar/YYYY-MM/<...>.md                            one event (attendees, organizer, agenda)
+state/                      kbmail-owned state (JSON)
+  index.jsonl               message ledger (id, thread, from/to, folder, attachments, path)
+  calendar_index.jsonl
+  export_state.json         per-folder watermarks (delta export)
+  labels.json               id -> labels, status (proposed|auto|confirmed), source, confidence, history
+  label_batches.json        open labeling batches
+  rules_history/            snapshot of every committed rules.yaml
+  kb_selection.json         thread -> select/skip, title, topics, assessed message ids
+  kb_convert.json           thread -> signature, raw target, images, formatted?
+  images.json               image registry (dedup by hash, status, description)
+  people.json               relationship statistics
+  wiki_manifest.json        raw file -> sha256 at ingest
+  wiki_snapshots/           ingested copy of each raw file (for diffs)
+  wiki_graph.json           typed graph (front-matter relations + wikilinks)
+  wiki_audit.jsonl          ingest/update/forget log
+  runs.json                 last run + history of every step (drives "due" logic)
+work/                       generated queues for Copilot
+  labeling/batch_NNN.md (+ .result.jsonl)
+  rules/RULES_CONTEXT.md
+  kb_select/batch_NNN.md (+ .result.jsonl)
+  convert/<thread>/thread.src.md, thread.md, QUEUE.md
+  wiki/QUEUE.md, LINT.md
+  people/PEOPLE_DIGEST.md, triage/TRIAGE.md, style/SAMPLES.md
+review/                     things for the human
+  labels_review.csv         optional Excel review
+  images/                   pending images, descriptions.yaml, REVIEW.md, <id>.mmd
+  questions.yaml            open questions + answers
+raw/                        knowledge sources for the wiki
+  email/<area>/, teams/<area>/   formatted threads (/kb-format)
+  notes/                    the user's answers (authoritative)
+  web/                      pages fetched from links in answers
+  docs/                     user documents converted from raw/inbox/
+  inbox/                    drop zone (pdf, docx, pptx, xlsx, html, ...) -> `kbmail raw import`
+wiki/                       the knowledge base (SCHEMA.md, index.md, log.md, people/, projects/, ...)
+drafts/                     email drafts (Markdown + front matter); `kbmail draft-outlook` -> Outlook Drafts
+.github/                    copilot-instructions.md, instructions/*.instructions.md, prompts/kb-*.prompt.md
+.vscode/settings.json       enables prompt files, auto-approves `kbmail` terminal commands
+```
+
+## Identifiers
+
+* message id `m` + sha1(Internet Message-ID or EntryID)[:11]. The same mail found in two folders is
+  exported once.
+* thread id `t` + sha1(ConversationID)[:11] (Outlook), chat id (Teams), or normalized subject as
+  fallback.
+* image id `img_` + sha256(content)[:10]. The same logo in 200 mails is one image, and images below
+  `images.min_bytes` are ignored.
+
+## Outlook export details (pywin32)
+
+* Items are sorted by `ReceivedTime` (descending) and iteration stops at the cut-off. No
+  `Items.Restrict` date strings, which are locale-dependent and a common source of bugs.
+* pywin32 returns Outlook's local wall-clock times tagged as UTC. kbmail re-reads them as local time.
+* Exchange senders/recipients (`EX` addresses) are resolved to SMTP via `PR_SMTP_ADDRESS` /
+  `PR_SENDER_SMTP_ADDRESS` / `GetExchangeUser()`.
+* HTML bodies are saved (`body.html`), so tables and inline images (`cid:`) survive conversion.
+  Inline images are matched to attachments by Content-ID.
+* Calendar uses `IncludeRecurrences` + `Restrict` (required for recurring series), with a DASL fallback
+  and a Python range check. Teams join boilerplate is removed from agendas.
+* Defaults: Inbox + Sent Items, no subfolders. `--include-subfolders`, `--all-folders` (every mail
+  folder in the default store except Deleted/Junk/Outbox/Drafts/Sync Issues), `--folder` (repeatable;
+  `inbox`, `sent`, `Inbox/Sub/Folder`, or `\\Store Name\Folder`), `outlook.extra_folders` for archives.
+
+## Labeling and rules
+
+Labels have a status: `proposed` (Copilot), `auto` (rules), `confirmed` (you). Confirmed labels are
+never overwritten. Rules (`config/rules.yaml`) are weighted conditions on sender, domains,
+participants, subject/body (substring or `re:` regex), folder, direction, categories and attachment
+names. An area is assigned when the summed weight reaches the threshold, and several areas can match.
+When rules change, `auto` labels are re-evaluated, and mail that no rule covers any more goes back to
+the Copilot queue.
+
+`kbmail rules evaluate` measures the rules against confirmed labels (per-area precision/recall,
+coverage, accuracy, list of mistakes). `kbmail rules prepare` adds mined signals: features with
+support ≥ 3 and purity ≥ 0.8 among confirmed labels.
+
+## KB conversion
+
+For each selected thread: HTML body → Markdown (markitdown); quoted history stripped from all but the
+first message (English and Japanese reply headers); attachments converted with markitdown (docx, pptx,
+xlsx, pdf, msg, html, ...); images inside docx/pptx/xlsx are extracted from the zip media folder;
+images and SVGs are registered and replaced by markers; secrets are redacted (`privacy.*`).
+`thread.md` is re-rendered whenever image descriptions change. A thread is "formatted" when its raw
+file's front matter carries the current `source_version`.
+
+## Wiki (LLM Wiki v2)
+
+`wiki/SCHEMA.md` is the contract: page types, memory tiers (episodic → semantic → procedural), front
+matter with `confidence`, `decay`, `last_confirmed`, `sources`, typed `relations`, claim-level
+citations, supersession instead of overwrite, and the ingest/query/lint operations. kbmail provides:
+
+* **delta ingest queue** with diffs (manifest + snapshots)
+* **lint**: required front matter, broken links/relations, missing sources, orphans, pages missing
+  from the index, supersession without `superseded_by`, and **stale pages**.
+  Effective confidence = `confidence × 0.5^(age / half-life)` with half-lives per `decay` class
+  (`wiki.half_life_days`)
+* **hybrid search**: BM25 (CJK bigram tokenization, so Japanese works without a morphological
+  analyzer) plus one-hop graph expansion, combined with reciprocal rank fusion and down-weighted by
+  effective confidence and supersession
+* **graph** from relations and wikilinks, with Mermaid neighbourhood rendering (`kbmail wiki graph --page ...`)
+* **audit trail** (`state/wiki_audit.jsonl`) next to the human-readable `wiki/log.md`
+
+Vector search is intentionally left out to avoid an embedding service. The search function is the
+place to add one (e.g. a local sentence-transformers index) if the wiki grows past a few hundred pages.
+
+## Privacy
+
+* Redaction before raw/: passwords, API keys/tokens (AWS, GitHub, Slack, OpenAI-style, Bearer),
+  private keys, Luhn-valid card numbers, plus your own `privacy.extra_patterns`. Previews in labeling
+  and selection batches are redacted too.
+* Copilot instructions forbid sending content to external services and storing non-work personal data.
+* The MSAL token cache (Teams) is git-ignored in the workspace.
+* `kbmail` never sends mail. `draft-outlook` only saves to Drafts.

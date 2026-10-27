@@ -1,4 +1,7 @@
 # kbmail workspace configuration. Every key is optional; defaults are shown.
+# Any key can also be set in .env or the environment as KBMAIL_<SECTION>__<KEY>
+# (e.g. KBMAIL_OUTLOOK__DAYS=60); those override this file. See .env.example
+# and `kbmail config show`.
 
 me:
   name: ""                 # your display name (used in drafts)

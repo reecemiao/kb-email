@@ -16,10 +16,21 @@
 5. **Private data stays in the workspace.** The tool repo holds no data. The workspace holds data,
    state and the prompt files.
 
+## Settings
+
+`DEFAULT_CONFIG` in `kbmail/workspace.py` is the single source of truth for setting names and types.
+It is overlaid by `kbmail.yaml`, then the workspace `.env`, then the current directory's `.env`, then
+real `KBMAIL_*` environment variables, and finally CLI flags (`Workspace.opt`). Variable names map
+nested keys with a double underscore (`outlook.include_subfolders` → `KBMAIL_OUTLOOK__INCLUDE_SUBFOLDERS`).
+Values are coerced to the default's type. `.env.example` is generated from `DEFAULT_CONFIG` and
+`CONFIG_HELP`, so it cannot drift. A test checks that uncommenting it reproduces the defaults.
+`KBMAIL_WORKSPACE` selects the workspace like `--workspace`.
+
 ## Workspace layout
 
 ```
 kbmail.yaml                 configuration (areas, me, export defaults, vision, privacy, teams)
+.env, .env.example          KBMAIL_* overrides (see Settings); .env is git-ignored
 config/
   rules.yaml                labeling rules (Copilot-written, kbmail-validated)
   rules_journal.md          conclusions of every rules refresh (read at the next refresh)

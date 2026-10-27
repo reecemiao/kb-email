@@ -4,6 +4,16 @@ A *workspace* is the folder you open in VS Code. It holds your private data
 (exported mail, state, knowledge base) and the Copilot prompt files. The tool
 code itself lives in the kbmail package, so the workspace can be its own
 private git repository.
+
+Configuration precedence (highest first):
+  1. command-line flags
+  2. environment variables          KBMAIL_<SECTION>__<KEY>=value
+  3. .env in the current directory  (same variables)
+  4. .env in the workspace root     (same variables)
+  5. kbmail.yaml
+  6. DEFAULT_CONFIG below
+Every CLI option that is not a one-off action (ids, paths, --force) has a
+config key, so every default can be set in kbmail.yaml or .env.
 """
 
 from __future__ import annotations
@@ -16,11 +26,15 @@ from datetime import date
 from pathlib import Path
 
 import yaml
+from dotenv import dotenv_values
 
 from kbmail.textutil import now_iso
 
 CONFIG_NAME = "kbmail.yaml"
 OTHERS = "others"
+ENV_PREFIX = "KBMAIL_"
+ENV_WORKSPACE = "KBMAIL_WORKSPACE"
+ENV_FILE = ".env"
 
 DEFAULT_CONFIG: dict = {
     "me": {"name": "", "emails": []},
@@ -30,6 +44,7 @@ DEFAULT_CONFIG: dict = {
         "folders": ["inbox", "sent"],
         "include_subfolders": False,
         "extra_folders": [],
+        "all_folders": False,
         "calendar": True,
         "calendar_future_days": 14,
         "save_html": True,
@@ -38,21 +53,88 @@ DEFAULT_CONFIG: dict = {
         "overlap_hours": 24,
         "max_body_chars": 60000,
     },
-    "labeling": {"batch_size": 40, "preview_chars": 700, "rule_threshold": 2.0},
+    "labeling": {"batch_size": 40, "limit": None, "preview_chars": 700, "rule_threshold": 2.0},
+    "review": {"source": "proposed", "order": "confidence", "accept_above": None},
     "rules": {"refresh_every_days": 14, "refresh_after_new_confirmed": 50},
-    "kb": {"include_auto_labels": True, "message_chars": 6000},
+    "kb": {"include_auto_labels": True, "message_chars": 6000, "select_batch_threads": 8},
     "copilot": {"vision": False},
     "images": {"min_bytes": 6000},
     "privacy": {"redact": True, "extra_patterns": []},
+    "questions": {"fetch_links": True},
     "people": {"top_n": 80},
     "triage": {"days": 14, "follow_up_after_days": 3},
-    "wiki": {"half_life_days": {"fast": 30, "normal": 180, "slow": 730}, "stale_below": 0.35},
+    "mail": {"search_limit": 15},
+    "style": {"samples": 40},
+    "sync": {"export": True, "teams": False},
+    "wiki": {
+        "half_life_days": {"fast": 30, "normal": 180, "slow": 730},
+        "stale_below": 0.35,
+        "search_limit": 10,
+        "search_raw": False,
+        "graph_depth": 1,
+    },
     "teams": {
+        "via": "graph",
         "tenant": "organizations",
         "client_id": "",
         "days": 30,
         "token_cache": "state/msal_cache.bin",
     },
+}
+
+# One-line help per key, used for the generated .env.example and `kbmail config show`.
+CONFIG_HELP: dict[str, str] = {
+    "me.name": "your display name (used in drafts)",
+    "me.emails": "all your SMTP addresses, comma-separated",
+    "areas": "area names (comma-separated) or a YAML list of {name, description, keywords}",
+    "outlook.days": "first export window in days; later runs are deltas (export --days)",
+    "outlook.folders": "folders to export: inbox, sent, or paths like Inbox/Projects (export --folder)",
+    "outlook.include_subfolders": "also export subfolders (export --include-subfolders)",
+    "outlook.extra_folders": "additional folders, e.g. archives",
+    "outlook.all_folders": "every mail folder of the default store (export --all-folders)",
+    "outlook.calendar": "export the calendar too (export --[no-]calendar)",
+    "outlook.calendar_future_days": "calendar look-ahead in days",
+    "outlook.save_html": "keep HTML bodies (tables, inline images) for KB conversion",
+    "outlook.save_attachments": "save attachments",
+    "outlook.attachment_max_mb": "skip attachments larger than this",
+    "outlook.overlap_hours": "delta export re-reads this much before the last watermark",
+    "outlook.max_body_chars": "truncate longer plain-text bodies",
+    "labeling.batch_size": "messages per Copilot labeling batch (label prepare --batch-size)",
+    "labeling.limit": "max messages to queue per `label prepare` (empty = all) (--limit)",
+    "labeling.preview_chars": "body preview length in labeling batches",
+    "labeling.rule_threshold": "default rule threshold if rules.yaml sets none",
+    "review.source": "proposed | auto | all (review --source)",
+    "review.order": "confidence | date (review --order)",
+    "review.accept_above": "bulk-confirm proposals with confidence >= X first (review --accept-above)",
+    "rules.refresh_every_days": "rules refresh is due after this many days...",
+    "rules.refresh_after_new_confirmed": "...or after this many newly confirmed labels",
+    "kb.include_auto_labels": "rule-labeled (unreviewed) mail can feed the KB",
+    "kb.message_chars": "max characters per message in KB selection batches",
+    "kb.select_batch_threads": "threads per KB selection batch (kb prepare --batch-threads)",
+    "copilot.vision": "true if Copilot may look at images",
+    "images.min_bytes": "ignore smaller images (logos, signature icons)",
+    "privacy.redact": "strip passwords/tokens/keys before raw/ and wiki/",
+    "privacy.extra_patterns": "extra regexes to redact (YAML list)",
+    "questions.fetch_links": "fetch URLs found in answers into raw/web (questions ingest --[no-]fetch)",
+    "people.top_n": "contacts listed in the people digest",
+    "triage.days": "look-back window for triage (triage --days)",
+    "triage.follow_up_after_days": "flag my unanswered questions after N days",
+    "mail.search_limit": "results for `kbmail mail` (-n)",
+    "style.samples": "sent messages collected by `kbmail style` (-n)",
+    "sync.export": "export from Outlook during `kbmail sync` (--[no-]export)",
+    "sync.teams": "also export Teams during `kbmail sync` (--[no-]teams)",
+    "wiki.half_life_days.fast": "confidence half-life for decay: fast",
+    "wiki.half_life_days.normal": "confidence half-life for decay: normal",
+    "wiki.half_life_days.slow": "confidence half-life for decay: slow",
+    "wiki.stale_below": "lint flags pages whose effective confidence is below this",
+    "wiki.search_limit": "results for `kbmail wiki search` (-n)",
+    "wiki.search_raw": "include raw/ sources in wiki search (--[no-]raw)",
+    "wiki.graph_depth": "neighbourhood depth for `kbmail wiki graph` (--depth)",
+    "teams.via": "graph | outlook (teams export --via)",
+    "teams.tenant": "Entra tenant id or domain",
+    "teams.client_id": "Entra app (public client) id with Chat.Read",
+    "teams.days": "Teams look-back window (teams export --days)",
+    "teams.token_cache": "MSAL token cache path (keep it out of git)",
 }
 
 
@@ -70,17 +152,158 @@ class WorkspaceError(RuntimeError):
     pass
 
 
+# ---------------------------------------------------------------- environment / .env
+
+_TRUE = {"1", "true", "yes", "on", "y"}
+_FALSE = {"0", "false", "no", "off", "n"}
+
+
+def _leaf_paths(d: dict, prefix: tuple = ()) -> list[tuple[str, ...]]:
+    out = []
+    for k, v in d.items():
+        if isinstance(v, dict) and v:
+            out += _leaf_paths(v, (*prefix, k))
+        else:
+            out.append((*prefix, k))
+    return out
+
+
+def env_name(path: tuple[str, ...] | str) -> str:
+    parts = path.split(".") if isinstance(path, str) else path
+    return ENV_PREFIX + "__".join(p.upper() for p in parts)
+
+
+def read_env(root: Path | None = None) -> dict[str, tuple[str, str]]:
+    """KBMAIL_* variables -> (value, source). Later sources win: workspace .env, cwd .env, environment."""
+    out: dict[str, tuple[str, str]] = {}
+    files = []
+    if root is not None:
+        files.append(Path(root) / ENV_FILE)
+    cwd_env = Path.cwd() / ENV_FILE
+    if not files or cwd_env.resolve() != files[0].resolve():
+        files.append(cwd_env)
+    for f in files:
+        if f.is_file():
+            for k, v in dotenv_values(f).items():
+                if k.startswith(ENV_PREFIX) and v is not None:
+                    out[k] = (v, str(f))
+    for k, v in os.environ.items():
+        if k.startswith(ENV_PREFIX):
+            out[k] = (v, "environment")
+    return out
+
+
+def coerce(raw: str, default, var: str):
+    """Parse an environment string using the type of the default value."""
+    text = raw.strip()
+    try:
+        if isinstance(default, bool):
+            low = text.lower()
+            if low in _TRUE:
+                return True
+            if low in _FALSE:
+                return False
+            raise ValueError("expected true/false")
+        if isinstance(default, int):
+            return int(text)
+        if isinstance(default, float):
+            return float(text)
+        if isinstance(default, list):
+            if text.startswith("["):
+                val = yaml.safe_load(text)
+                if not isinstance(val, list):
+                    raise ValueError("expected a list")
+                return val
+            return [x.strip() for x in text.split(",") if x.strip()]
+        if isinstance(default, dict):
+            val = yaml.safe_load(text)
+            if not isinstance(val, dict):
+                raise ValueError("expected a mapping like {a: 1}")
+            return val
+        if isinstance(default, str):
+            return raw
+        return yaml.safe_load(text)  # default None: a number or bool
+    except (ValueError, yaml.YAMLError) as e:
+        raise WorkspaceError(f"{var}={raw!r}: {e}") from e
+
+
+def env_overrides(root: Path | None = None) -> tuple[dict, dict[str, str], list[str]]:
+    """Return (nested overrides, {dotted key: source}, warnings) from KBMAIL_* variables."""
+    known = {env_name(p): p for p in _leaf_paths(DEFAULT_CONFIG)}
+    sections = {env_name((k,)): (k,) for k, v in DEFAULT_CONFIG.items() if isinstance(v, dict)}
+    overrides: dict = {}
+    sources: dict[str, str] = {}
+    warnings = []
+    for var, (raw, src) in sorted(read_env(root).items()):
+        if var == ENV_WORKSPACE or not raw.strip():
+            continue  # an empty value (KEY=) means "not set"
+        path = known.get(var) or sections.get(var)
+        if path is None:
+            warnings.append(f"ignoring unknown setting {var} (from {src}); see .env.example for valid names")
+            continue
+        default = DEFAULT_CONFIG
+        for part in path:
+            default = default[part]
+        cur = overrides
+        for part in path[:-1]:
+            cur = cur.setdefault(part, {})
+        cur[path[-1]] = coerce(raw, default, var)
+        sources[".".join(path)] = src
+    return overrides, sources, warnings
+
+
+def env_example() -> str:
+    """A commented .env template listing every setting with its default."""
+    lines = [
+        "# kbmail settings. Copy to .env (or set real environment variables) and uncomment what you need.",
+        "# Precedence: CLI flag > environment > .env (current dir) > .env (workspace) > kbmail.yaml > default.",
+        "# Names: KBMAIL_<SECTION>__<KEY> (double underscore between levels).",
+        "# Lists: comma-separated (a,b) or YAML ([a, b]). Booleans: true/false.",
+        "",
+        "# Workspace folder used when kbmail runs outside it (same as --workspace).",
+        f"# {ENV_WORKSPACE}=C:\\kb",
+    ]
+    section = None
+    for path in _leaf_paths(DEFAULT_CONFIG):
+        if path[0] != section:
+            section = path[0]
+            lines += ["", f"# --- {section}"]
+        default = DEFAULT_CONFIG
+        for part in path:
+            default = default[part]
+        if isinstance(default, bool):
+            val = str(default).lower()
+        elif isinstance(default, list):
+            val = (
+                ",".join(map(str, default))
+                if all(isinstance(x, str) for x in default)
+                else yaml.safe_dump(default, default_flow_style=True).strip()
+            )
+        elif default is None:
+            val = ""
+        else:
+            val = str(default)
+        help_ = CONFIG_HELP.get(".".join(path))
+        if help_:
+            lines.append(f"# {help_}")
+        lines.append(f"# {env_name(path)}={val}")
+    return "\n".join(lines) + "\n"
+
+
 class Workspace:
     def __init__(self, root: Path | str):
         self.root = Path(root).resolve()
         self._config: dict | None = None
+        self.config_sources: dict[str, str] = {}
+        self.config_warnings: list[str] = []
 
     # ------------------------------------------------------------ discovery
     @classmethod
     def find(cls, start: str | Path | None = None) -> Workspace:
-        env = os.environ.get("KBMAIL_WORKSPACE")
-        if start is None and env:
-            start = env
+        if start is None:
+            env = read_env().get(ENV_WORKSPACE)
+            if env:
+                start = env[0]
         here = Path(start or Path.cwd()).resolve()
         for p in [here, *here.parents]:
             if (p / CONFIG_NAME).exists():
@@ -125,9 +348,18 @@ class Workspace:
     def config(self) -> dict:
         if self._config is None:
             p = self.path(CONFIG_NAME)
-            user = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
-            self._config = deep_merge(DEFAULT_CONFIG, user or {})
+            user = (yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}) or {}
+            env, env_sources, self.config_warnings = env_overrides(self.root)
+            self._config = deep_merge(deep_merge(DEFAULT_CONFIG, user), env)
+            self.config_sources = {".".join(k): "default" for k in _leaf_paths(DEFAULT_CONFIG)}
+            for k in _leaf_paths(user):
+                self.config_sources[".".join(k)] = CONFIG_NAME
+            self.config_sources.update(env_sources)
         return self._config
+
+    def opt(self, value, dotted: str):
+        """A CLI value if given, else the configured default (kbmail.yaml / .env / environment)."""
+        return self.cfg(dotted) if value is None else value
 
     def cfg(self, dotted: str, default=None):
         cur = self.config
@@ -251,6 +483,12 @@ def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
         else:
             shutil.copyfile(src, dst)
         written.append(rel)
+    # Generated from DEFAULT_CONFIG so it always lists every current setting.
+    (target / ".env.example").write_text(env_example(), encoding="utf-8")
+    written.append(".env.example")
+    if not (target / ENV_FILE).exists():
+        (target / ENV_FILE).write_text(env_example(), encoding="utf-8")
+        written.append(ENV_FILE)
     ws = Workspace(target)
     ws.ensure_dirs()
     return written

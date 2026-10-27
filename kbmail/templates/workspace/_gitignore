@@ -2,3 +2,6 @@
 state/msal_cache.bin
 state/*.tmp
 **/~$*
+
+# local settings (see .env.example)
+.env

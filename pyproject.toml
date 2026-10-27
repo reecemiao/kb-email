@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 dependencies = [
     "PyYAML>=6.0",
     "markitdown[docx,pptx,xlsx,pdf,outlook]>=0.1.0",
+    "python-dotenv>=1.0",
     "pywin32>=306; sys_platform == 'win32'",
 ]
 

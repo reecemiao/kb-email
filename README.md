@@ -58,6 +58,39 @@ Version the workspace in a *private* repo if you like; that also gives the wiki 
 On macOS/Linux, or for testing, `kbmail import-eml <folder>` imports saved `.eml` files instead of
 exporting from Outlook. Everything else works the same.
 
+## Settings: `kbmail.yaml` and `.env`
+
+Every setting has a built-in default, and every CLI option that isn't a one-off action (ids, paths,
+`--force`) reads its default from a setting. You can set them in `kbmail.yaml` or as
+`KBMAIL_<SECTION>__<KEY>` variables in a `.env` file or the environment. Precedence, highest first:
+
+1. command-line flag, e.g. `kbmail export --include-subfolders`
+2. environment variable, e.g. `$env:KBMAIL_OUTLOOK__INCLUDE_SUBFOLDERS = "true"`
+3. `.env` in the current directory
+4. `.env` in the workspace root
+5. `kbmail.yaml`
+6. built-in default
+
+`kbmail init` writes `.env.example` with every setting, its default and a one-line description. It
+also creates an all-commented `.env` (git-ignored in the workspace) that you can edit; just uncomment
+lines. `kbmail init --upgrade` regenerates `.env.example` and never touches `.env`.
+
+```dotenv
+KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.co.jp
+KBMAIL_OUTLOOK__DAYS=60
+KBMAIL_OUTLOOK__FOLDERS=inbox,sent,Inbox/Projects
+KBMAIL_COPILOT__VISION=false
+KBMAIL_REVIEW__ACCEPT_ABOVE=0.95
+KBMAIL_SYNC__TEAMS=true
+KBMAIL_WORKSPACE=C:\kb        # lets you run kbmail from any folder
+```
+
+Values are parsed by the default's type. Booleans take `true`/`false`. Lists are comma-separated
+(`a,b`) or YAML (`[a, b]`). An empty value (`KEY=`) counts as not set. Unknown `KBMAIL_*` names
+print a warning, and invalid values stop the command with the variable's name.
+`kbmail config show [prefix]` prints each effective value, where it came from and its variable name.
+`kbmail config env` prints a fresh template.
+
 ## First run, step by step
 
 | # | what | who | command / prompt |

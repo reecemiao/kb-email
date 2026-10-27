@@ -1,6 +1,6 @@
 """Exercise the pywin32 exporter against a minimal fake of the Outlook object model."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from kbmail import outlook
 from kbmail.records import calendar_index, message_index, read_message
@@ -219,9 +219,8 @@ def test_export_mail_delta_and_calendar(ws, monkeypatch):
 
 
 def test_com_dt_reinterprets_wall_clock():
-    from datetime import timezone
 
-    v = datetime(2026, 10, 1, 9, 30, tzinfo=timezone.utc)  # what pywin32 hands back for 09:30 local
+    v = datetime(2026, 10, 1, 9, 30, tzinfo=UTC)  # what pywin32 hands back for 09:30 local
     out = outlook.com_dt(v)
     assert (out.hour, out.minute) == (9, 30) and out.tzinfo is not None
     assert outlook.com_dt(datetime(4501, 1, 1)) is None

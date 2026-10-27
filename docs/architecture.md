@@ -14,7 +14,7 @@
 4. **Human in the loop where it matters.** Label confirmation, image descriptions without vision,
    answers to open questions, relationship overrides.
 5. **Private data stays in the workspace.** The tool repo holds no data. The workspace holds data,
-   state and the prompt files.
+   state and the agent customizations (skills, agent, hook).
 
 ## Settings
 
@@ -76,8 +76,12 @@ raw/                        knowledge sources for the wiki
   inbox/                    drop zone (pdf, docx, pptx, xlsx, html, ...) -> `kbmail raw import`
 wiki/                       the knowledge base (SCHEMA.md, index.md, log.md, people/, projects/, ...)
 drafts/                     email drafts (Markdown + front matter); `kbmail draft-outlook` -> Outlook Drafts
-.github/                    copilot-instructions.md, instructions/*.instructions.md, prompts/kb-*.prompt.md
-.vscode/settings.json       enables prompt files, auto-approves `kbmail` terminal commands
+AGENTS.md                   always-on agent instructions (folder contract, privacy, output formats)
+.github/skills/<name>/      SKILL.md per job (/kb-* commands) + bundled templates; kbmail-cli reference
+.github/agents/             kb-librarian.agent.md (tools without web, handoffs)
+.github/hooks/kbmail.json   sessionStart -> `kbmail hook session-start` (status as context)
+.github/instructions/       raw.instructions.md, wiki.instructions.md (applyTo globs)
+.vscode/settings.json       Local-harness hooks on, auto-approves `kbmail` terminal commands
 ```
 
 ## Identifiers

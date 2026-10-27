@@ -1,6 +1,7 @@
 ---
-description: "First-time setup: walk the user through export, labeling, review, rules, KB, wiki"
-agent: agent
+name: "kb-start"
+description: "Guided first run of a kbmail workspace: configure areas, export mail, label, review, rules, KB selection, images, questions, wiki, style. Use when the user sets up kbmail for the first time or asks how to get started."
+disable-model-invocation: true
 ---
 Guide the user through the first full run of this workspace, one stage at a time. Before each stage run
 `kbmail status`, explain in two sentences what will happen, do it, and show the result. Pause for the

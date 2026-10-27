@@ -7,7 +7,7 @@ import math
 import re
 import unicodedata
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 
@@ -43,7 +43,7 @@ def parse_dt(value) -> datetime | None:
 
 
 def utc_iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------- front matter

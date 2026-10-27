@@ -1,6 +1,6 @@
 ---
-description: "Label exported messages by area (writes work/labeling/*.result.jsonl)"
-agent: agent
+name: "kb-label"
+description: "Label exported messages by area into work/labeling/*.result.jsonl and import them. Use when there are open labeling batches or the user asks to label or classify new mail."
 ---
 Label every open batch in `work/labeling/` (files `batch_NNN.md` without a matching
 `batch_NNN.result.jsonl`). If there are none, run `kbmail label prepare` first.

@@ -464,10 +464,52 @@ _USER_OWNED = {
 }
 
 
+# Files shipped by earlier versions and replaced since (prompt files -> skills,
+# copilot-instructions.md -> AGENTS.md). Removed on upgrade only if they are still ours.
+_OBSOLETE = {
+    ".github/copilot-instructions.md": "# Copilot instructions for this kbmail workspace",
+    **{
+        f".github/prompts/{n}.prompt.md": "---"
+        for n in (
+            "kb-ask",
+            "kb-draft",
+            "kb-format",
+            "kb-images",
+            "kb-label",
+            "kb-people",
+            "kb-rules",
+            "kb-select",
+            "kb-start",
+            "kb-style",
+            "kb-suggest",
+            "kb-svg",
+            "kb-sync",
+            "kb-wiki-ingest",
+            "kb-wiki-lint",
+        )
+    },
+}
+
+
+def _remove_obsolete(target: Path) -> list[str]:
+    removed = []
+    for rel, marker in _OBSOLETE.items():
+        p = target / rel
+        if p.is_file() and p.read_text(encoding="utf-8", errors="replace").startswith(marker):
+            p.unlink()
+            removed.append(rel)
+    prompts = target / ".github" / "prompts"
+    if prompts.is_dir() and not any(prompts.iterdir()):
+        prompts.rmdir()
+    return removed
+
+
 def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
     target = Path(target).resolve()
     target.mkdir(parents=True, exist_ok=True)
     written = []
+    if upgrade:
+        written += [f"removed {r}" for r in _remove_obsolete(target)]
     for src in sorted(TEMPLATE_DIR.rglob("*")):
         if src.is_dir() or src.name == "__pycache__" or src.suffix == ".pyc":
             continue

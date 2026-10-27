@@ -103,6 +103,25 @@ def next_actions(ws: Workspace, s: dict) -> list[str]:
     return out
 
 
+def hook_context(ws: Workspace) -> str:
+    """Compact status for the agent session-start hook (`kbmail hook session-start`)."""
+    s = collect(ws)
+    lines = [
+        f"kbmail workspace {ws.root} - state at session start:",
+        f"- messages {s['messages']}, calendar events {s['calendar_events']}, unlabeled {s['unlabeled']}, "
+        f"labels {s['labels'] or '-'}",
+        f"- rules: {'refresh DUE, ' if s['rules_due'] else ''}{s['rules_why']}",
+        f"- KB: {s['kb']}; unformatted threads {s['unformatted_threads']}; images pending {s['images_pending']}; "
+        f"questions {s['questions'] or '-'}",
+        f"- wiki: {s['wiki']}",
+        f"- copilot.vision: {str(bool(ws.cfg('copilot.vision'))).lower()}",
+        "Next actions (in order):",
+        *[f"{i}. {a}" for i, a in enumerate(s["next"], 1)],
+        "Use the matching /kb-* skill for each action and follow AGENTS.md.",
+    ]
+    return "\n".join(lines)
+
+
 def print_status(ws: Workspace, log=print) -> dict:
     s = collect(ws)
     log(f"Workspace: {ws.root}")

@@ -82,7 +82,7 @@ def test_init_upgrade_keeps_user_files(tmp_path):
     root = tmp_path / "w"
     init_workspace(root)
     (root / "kbmail.yaml").write_text("areas: [mine]\n", encoding="utf-8")
-    prompt = root / ".github/prompts/kb-label.prompt.md"
+    prompt = root / ".github/skills/kb-label/SKILL.md"
     prompt.write_text("stale", encoding="utf-8")
     init_workspace(root, upgrade=True)
     assert (root / "kbmail.yaml").read_text(encoding="utf-8") == "areas: [mine]\n"

@@ -1,13 +1,13 @@
 {
-  // Prompt files in .github/prompts are available as /kb-* commands in Copilot Chat.
-  "chat.promptFiles": true,
-  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
-  // Let Copilot agent mode run the kbmail CLI without asking each time.
-  // Remove this if you prefer to approve every command.
+  // Skills (.github/skills), the KB Librarian agent (.github/agents), AGENTS.md and the
+  // session-start hook (.github/hooks) are discovered automatically by Copilot.
+  // Local harness only: run repository hooks there too.
+  "chat.useHooks": true,
+  // Let agents run the kbmail CLI without asking each time. Remove to approve every command.
   "chat.tools.terminal.autoApprove": {
     "kbmail": true
   },
-  // Large exported data is still readable by Copilot, just kept out of quick-open/search noise.
+  // Large exported data is still readable by agents, just kept out of quick-open/search noise.
   "search.exclude": {
     "data/**/_raw/**": true,
     "data/**/*_files/**": true,

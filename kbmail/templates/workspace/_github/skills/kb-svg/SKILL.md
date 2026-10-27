@@ -1,6 +1,6 @@
 ---
-description: "Convert SVG diagrams to Mermaid (or describe them) - works without vision"
-agent: agent
+name: "kb-svg"
+description: "Convert SVG diagrams in review/images to Mermaid or describe them; works without image vision because SVG is text. Use when SVG images are pending."
 ---
 SVG files are XML text, so you can read them even when image vision is disabled.
 

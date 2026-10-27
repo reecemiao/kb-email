@@ -1,6 +1,6 @@
 ---
-description: "Choose which area threads become knowledge-base sources (writes work/kb_select/*.result.jsonl)"
-agent: agent
+name: "kb-select"
+description: "Decide which labeled mail threads contain durable knowledge for the knowledge base, and raise questions about unknown terms. Use when there are open KB selection batches in work/kb_select/."
 ---
 Process every open batch in `work/kb_select/` (`batch_NNN.md` without `batch_NNN.result.jsonl`). If there
 are none, run `kbmail kb prepare`.

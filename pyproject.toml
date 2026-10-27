@@ -7,7 +7,7 @@ name = "kbmail"
 version = "0.1.0"
 description = "Export Outlook mail/calendar (and Teams chats), label them by area, and grow an LLM wiki knowledge base with GitHub Copilot in VS Code."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = [
     "PyYAML>=6.0",
@@ -42,7 +42,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py312"
 extend-exclude = ["kbmail/templates"]
 
 [tool.ruff.lint]

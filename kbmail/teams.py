@@ -20,7 +20,7 @@ import html as _html
 import json
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from kbmail.records import message_id_for, message_index, write_message
 from kbmail.textutil import now_iso, parse_dt, short_hash, utc_iso
@@ -150,7 +150,7 @@ def export_graph(ws: Workspace, days: int | None = None, log=print) -> dict:
     s = requests.Session()
     s.headers["Authorization"] = f"Bearer {token}"
     state = ws.load_json(STATE, {"chats": {}})
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     default_since = now - timedelta(days=days or ws.cfg("teams.days", 30))
     index = message_index(ws)
     n_msgs = n_records = 0

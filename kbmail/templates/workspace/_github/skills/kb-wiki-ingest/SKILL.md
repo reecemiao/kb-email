@@ -1,8 +1,8 @@
 ---
-description: "Ingest new/changed raw sources into the wiki (delta), following wiki/SCHEMA.md"
-agent: agent
+name: "kb-wiki-ingest"
+description: "Ingest new or changed raw/ sources into the LLM wiki (delta, with diffs) following wiki/SCHEMA.md. Use when work/wiki/QUEUE.md has entries or the user asks to update the wiki."
 ---
-Read `wiki/SCHEMA.md` first; it is the contract. Then run `kbmail wiki queue` and open `work/wiki/QUEUE.md`.
+Read [wiki/SCHEMA.md](../../../wiki/SCHEMA.md) first; it is the contract. Then run `kbmail wiki queue` and open `work/wiki/QUEUE.md`.
 
 For each **new** raw file (one at a time, smallest first unless the user says otherwise):
 1. Read it. Check `kbmail wiki search "<main entities>"` to find existing pages before creating new ones.

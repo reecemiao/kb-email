@@ -7,9 +7,11 @@ suggest which emails need attention, and draft replies in your own style.
 * **Python (`kbmail` CLI)** does everything deterministic: export via pywin32, de-duplication and
   delta tracking, rule-based labeling, markitdown conversion, redaction, queues, wiki bookkeeping
   (diffs, lint, confidence decay, search, graph), relationship statistics.
-* **Copilot agent mode** does the parts that need judgement, through prompt files (`/kb-label`,
-  `/kb-rules`, `/kb-select`, `/kb-format`, `/kb-wiki-ingest`, `/kb-draft`, ...). Each one reads a
-  file kbmail prepared and writes a result file in a fixed format, which kbmail validates and imports.
+* **Copilot** (latest VS Code) does the parts that need judgement, through
+  [agent skills](https://agentskills.io) that also work as `/` commands (`/kb-label`, `/kb-rules`,
+  `/kb-select`, `/kb-format`, `/kb-wiki-ingest`, `/kb-draft`, ...). Each one reads a file kbmail
+  prepared and writes a result file in a fixed format, which kbmail validates and imports. A **KB
+  Librarian** custom agent ties them together, and a session-start hook gives it the current state.
 * **You** confirm labels, describe images when Copilot vision is off, and answer open questions.
 
 Nothing needs an API key: the only LLM is the Copilot you already have in VS Code.
@@ -40,19 +42,21 @@ Python if you don't have one.
 git clone https://github.com/reecemiao/kb-email
 cd kb-email
 uv tool install -e ".[teams]"   # puts `kbmail` on PATH; drop [teams] if you don't need the Teams exporter
-kbmail init C:\kb               # creates your private workspace (config, prompts, wiki skeleton)
+kbmail init C:\kb               # creates your private workspace (config, skills, agent, wiki skeleton)
 ```
 
 `uv tool install -e` keeps the install linked to the clone, so `git pull` updates it (rerun the command
-when dependencies change). Then run `kbmail init C:\kb --upgrade` to refresh the workspace's prompt files.
+when dependencies change). Then run `kbmail init C:\kb --upgrade` to refresh the workspace's skills,
+agent, hook and schema (your config, `.env` and wiki pages are never overwritten).
 
 Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords, `copilot.vision`), then open
-`C:\kb` in VS Code with Copilot Chat in **Agent** mode. Type `/kb-start` and Copilot walks you through
-the first run.
+`C:\kb` in VS Code. In the Chat view, pick the **KB Librarian** agent and type `/kb-start`; Copilot
+walks you through the first run.
 
-Requirements: Python 3.10+, classic Outlook desktop (the new WebView-based Outlook has no COM API),
-VS Code with GitHub Copilot Chat (prompt files enabled: the workspace's `.vscode/settings.json` does
-it). The workspace is separate from this repo, so your mail never ends up in the tool's git history.
+Requirements: Python 3.12+, classic Outlook desktop (the new WebView-based Outlook has no COM API),
+current VS Code with GitHub Copilot. Skills, the custom agent and `AGENTS.md` are picked up
+automatically, and the hook needs `kbmail` on PATH. The workspace is separate from this repo, so your
+mail never ends up in the tool's git history.
 Version the workspace in a *private* repo if you like; that also gives the wiki a full audit history.
 
 On macOS/Linux, or for testing, `kbmail import-eml <folder>` imports saved `.eml` files instead of
@@ -93,7 +97,7 @@ print a warning, and invalid values stop the command with the variable's name.
 
 ## First run, step by step
 
-| # | what | who | command / prompt |
+| # | what | who | command / skill |
 |---|---|---|---|
 | 1 | Export mail + calendar for the last *n* days. Default: Inbox + Sent Items, subfolders skipped | kbmail | `kbmail export --days 30` (`--include-subfolders`, `--all-folders`, `--folder "Inbox/Projects"`, `--no-calendar`) |
 | 2 | Rough labeling into your areas + `others` | Copilot | `kbmail label prepare` → `/kb-label` → `kbmail label import` |
@@ -153,7 +157,7 @@ app registration your tenant allows. An experimental Outlook route reads the hid
 ## More
 
 * [docs/architecture.md](docs/architecture.md): workspace layout, file formats, state files, design decisions
-* [docs/copilot.md](docs/copilot.md): VS Code / Copilot setup, vision on/off, prompt files, automation options
+* [docs/copilot.md](docs/copilot.md): VS Code / Copilot setup: skills, KB Librarian agent, hook, vision on/off, automation
 * [docs/teams.md](docs/teams.md): Teams feasibility and setup
 
 ## Development

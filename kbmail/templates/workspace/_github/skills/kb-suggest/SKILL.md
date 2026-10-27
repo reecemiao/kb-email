@@ -1,6 +1,6 @@
 ---
-description: "Suggest which emails to send or answer now, and draft them on request"
-agent: agent
+name: "kb-suggest"
+description: "Suggest which emails to send or answer now (from `kbmail triage`), prioritized, and draft the chosen ones. Use when the user asks what needs attention, what to reply to, or what to follow up on."
 ---
 1. Run `kbmail triage` and read `work/triage/TRIAGE.md` (heuristic: threads waiting for the user's reply,
    questions the user asked without an answer, meetings in the next 3 days).

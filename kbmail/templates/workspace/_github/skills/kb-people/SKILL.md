@@ -1,9 +1,9 @@
 ---
-description: "Infer relationships and update wiki/people pages from the people digest"
-agent: agent
+name: "kb-people"
+description: "Infer relationships between the mailbox owner and contacts from the people digest and update wiki/people pages. Use after `kbmail people build` reports changes or when the user asks who someone is."
 ---
 Run `kbmail people build`, then read `work/people/PEOPLE_DIGEST.md`, `config/people.yaml` (user overrides
-always win) and `wiki/SCHEMA.md` section 7.
+always win) and [wiki/SCHEMA.md](../../../wiki/SCHEMA.md) section 7.
 
 For people marked `changed` (all of them on the first run), within the top of the table:
 1. Infer the relationship to the mailbox owner from the signals: they CC the owner on their mail

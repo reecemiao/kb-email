@@ -29,7 +29,8 @@ def cmd_init(args):
     )
     if not args.upgrade:
         print(
-            "Next: edit kbmail.yaml (me.emails, areas), open the folder in VS Code, and run `kbmail export --days 30`."
+            "Next: edit kbmail.yaml (me.emails, areas), open the folder in VS Code, select the KB Librarian "
+            "agent and type /kb-start."
         )
 
 
@@ -283,6 +284,26 @@ def cmd_teams(args):
         teams.export_graph(ws, args.days)
 
 
+def cmd_hook(args):
+    """Agent hooks (.github/hooks/kbmail.json). Never fails: hooks must not break a session."""
+    from kbmail.status import hook_context
+
+    payload = {}
+    try:
+        if not sys.stdin.isatty():
+            payload = json.loads(sys.stdin.read() or "{}")
+    except (ValueError, OSError):
+        payload = {}
+    out = {}
+    try:
+        cwd = payload.get("cwd") if isinstance(payload, dict) else None
+        ws = Workspace.find(args.workspace or cwd or None)
+        out = {"additionalContext": hook_context(ws)}
+    except Exception as e:  # not a kbmail workspace, broken config, ...: add a hint, never an error
+        out = {"additionalContext": f"kbmail: status unavailable ({e}). Run `kbmail status` to check."}
+    print(json.dumps(out, ensure_ascii=False))
+
+
 def cmd_config(args):
     from kbmail.workspace import env_example, env_name
 
@@ -456,6 +477,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--via", choices=["graph", "outlook"], help="(default: teams.via)")
     s.add_argument("--days", type=int, help="look-back window (default: teams.days, or since last export)")
     s.set_defaults(func=cmd_teams)
+
+    s = sub.add_parser("hook", help="agent hook entry points (used by .github/hooks/kbmail.json)")
+    s.add_argument("event", choices=["session-start"])
+    s.set_defaults(func=cmd_hook)
 
     s = sub.add_parser("config", help="show effective settings and where they come from; print a .env template")
     s.add_argument("action", choices=["show", "env"], nargs="?", default="show")

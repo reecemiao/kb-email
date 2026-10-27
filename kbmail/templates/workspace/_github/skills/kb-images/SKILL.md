@@ -1,6 +1,6 @@
 ---
-description: "Describe pending images (only when Copilot vision is enabled)"
-agent: agent
+name: "kb-images"
+description: "Describe pending images in review/images/descriptions.yaml, only when copilot.vision is enabled. Use when images are waiting for descriptions and vision is allowed."
 ---
 Check `kbmail.yaml`: if `copilot.vision` is not `true`, stop and tell the user to describe the images
 themselves in `review/images/descriptions.yaml` (preview: `review/images/REVIEW.md`), then run

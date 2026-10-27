@@ -1,4 +1,6 @@
 ---
+name: kbmail wiki
+description: Rules for knowledge-base pages under wiki/
 applyTo: "wiki/**"
 ---
 When creating or editing files under `wiki/`, follow `wiki/SCHEMA.md` exactly: required front matter,

@@ -1,8 +1,9 @@
 ---
-description: "Answer a question from the knowledge base (and crystallize good answers)"
-agent: agent
+name: "kb-ask"
+description: "Answer a question from the knowledge base and mail with citations, and crystallize valuable answers into wiki pages. Use when the user asks what is known about a topic, project, person, or decision."
+argument-hint: "Your question, e.g. what was decided about the payment API cut-over?"
 ---
-Question: ${input:question:What do you want to know?}
+The question is the text after `/kb-ask` (or the user's request that loaded this skill). If it is missing, ask for it.
 
 1. Run `kbmail wiki search "<key terms>"` (try 2-3 phrasings, also `--raw` for sources not yet in the
    wiki). Read the top pages and follow their relations/links one hop (graph traversal).

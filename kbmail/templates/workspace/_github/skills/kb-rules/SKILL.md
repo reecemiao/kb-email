@@ -1,6 +1,6 @@
 ---
-description: "Create or refresh config/rules.yaml from confirmed labels; record conclusions"
-agent: agent
+name: "kb-rules"
+description: "Create or refresh config/rules.yaml from the user's confirmed labels, evaluate, commit, and record conclusions in config/rules_journal.md. Use when `kbmail status` says rules are due or the user asks to improve labeling rules."
 ---
 Goal: deterministic rules that label new mail like the user would, so later runs need less LLM work.
 High precision matters more than coverage: anything rules don't decide goes to `/kb-label` anyway.
@@ -10,7 +10,7 @@ High precision matters more than coverage: anything rules don't decide goes to `
    category with support/purity), uncovered examples, labels confirmed since the last refresh, and
    **previous conclusions** from `config/rules_journal.md`. Build on those conclusions; don't undo a
    past decision without a reason from the new data.
-2. Read `config/rules.yaml` (format documented at the top of the file).
+2. Read `config/rules.yaml` and [the rules format reference](./rules-format.md).
 3. Edit the rules:
    - fix rules that cause mistakes (narrow them with extra `when` fields, add `unless`, lower weight, or
      disable with `disabled: true` and a description of why)

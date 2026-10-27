@@ -1,13 +1,13 @@
 ---
-description: "Delta run: process only what is new since last time (mail, labels, rules, KB, wiki)"
-agent: agent
+name: "kb-sync"
+description: "Delta update of the whole workspace: runs `kbmail sync` and works through every due queue (labels, rules, KB selection, images, format, wiki, people, triage). Use when the user asks to update, sync, catch up, or process new mail."
 ---
 Bring the workspace up to date, working only on deltas.
 
 1. Run `kbmail sync` (add `--skip-export` if the user already exported or is not on Windows; add
    `--teams` if Teams export is configured). It exports new mail, applies the rules, prepares all
    queues and prints `kbmail status`.
-2. Work through the "Next" list from the status output, in order, using the matching prompt:
+2. Work through the "Next" list from the status output, in order, using the matching skill:
    - labeling batches → `/kb-label`, then `kbmail label import`
    - proposed labels → ask the user to run `kbmail review` (only the new proposals are shown); also
      suggest spot-checking rule labels with `kbmail review --source auto` now and then

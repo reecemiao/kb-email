@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from itertools import batched
 from pathlib import Path
 
 from kbmail import images as imgs
@@ -81,8 +82,7 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
         return []
     chars = min(ws.cfg("kb.message_chars", 6000), 2500)
     written = []
-    for start in range(0, len(todo), batch_threads):
-        chunk = todo[start : start + batch_threads]
+    for chunk in batched(todo, batch_threads):
         name = f"batch_{state['next']:03d}"
         state["next"] += 1
         result = f"{SELECT_DIR}/{name}.result.jsonl"

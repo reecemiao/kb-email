@@ -1,8 +1,8 @@
 ---
-description: "Self-heal the wiki: lint, stale pages, contradictions, duplicates"
-agent: agent
+name: "kb-wiki-lint"
+description: "Self-heal the wiki: fix lint findings, review stale pages, resolve contradictions and duplicate entities. Use weekly or when the user asks to clean up or check the wiki."
 ---
-Run `kbmail wiki lint` and read `work/wiki/LINT.md`, then fix, following `wiki/SCHEMA.md`:
+Run `kbmail wiki lint` and read `work/wiki/LINT.md`, then fix, following [wiki/SCHEMA.md](../../../wiki/SCHEMA.md):
 1. frontmatter / broken_links / missing_sources / not_in_index / orphans: repair directly (link orphans
    from the right hub page or index; fix or remove broken links).
 2. stale: for each page, search for newer evidence (`kbmail wiki search`, `kbmail mail "<terms>"`). If

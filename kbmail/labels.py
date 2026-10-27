@@ -17,6 +17,7 @@ import os
 import shutil
 import subprocess
 import sys
+from itertools import batched
 
 from kbmail.records import fmt_people, fmt_person, message_index, read_message
 from kbmail.redact import redact
@@ -82,8 +83,7 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
         return []
     rules = load_rules(ws)
     written = []
-    for start in range(0, len(pending), batch_size):
-        chunk = pending[start : start + batch_size]
+    for chunk in batched(pending, batch_size):
         name = f"batch_{state['next']:03d}"
         state["next"] += 1
         result = f"{WORKDIR}/{name}.result.jsonl"

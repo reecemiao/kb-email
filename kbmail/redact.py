@@ -36,12 +36,14 @@ def redact(text: str, extra_patterns: list[str] | None = None) -> tuple[str, int
     def sub(pattern, repl, s, flags=re.S):
         nonlocal count
         if repl is None:
+
             def card(m):
                 nonlocal count
                 if _luhn(m.group(0)):
                     count += 1
                     return "[REDACTED-CARD]"
                 return m.group(0)
+
             return re.sub(pattern, card, s)
         new, n = re.subn(pattern, repl, s, flags=flags)
         count += n

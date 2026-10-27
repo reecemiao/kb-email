@@ -22,7 +22,16 @@ from pathlib import Path
 
 from kbmail.convert import file_to_markdown
 from kbmail.redact import redact
-from kbmail.textutil import BM25, dump_frontmatter, now_iso, parse_dt, parse_frontmatter, sha256_bytes, short_hash, slugify
+from kbmail.textutil import (
+    BM25,
+    dump_frontmatter,
+    now_iso,
+    parse_dt,
+    parse_frontmatter,
+    sha256_bytes,
+    short_hash,
+    slugify,
+)
 from kbmail.workspace import Workspace
 
 MANIFEST = "state/wiki_manifest.json"
@@ -38,6 +47,7 @@ LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
 
 
 # ---------------------------------------------------------------- raw drop-zone import
+
 
 def raw_import(ws: Workspace, log=print) -> int:
     """Convert anything dropped in raw/inbox/ (pdf, docx, pptx, xlsx, html, ...) into raw/docs/*.md."""
@@ -68,6 +78,7 @@ def raw_import(ws: Workspace, log=print) -> int:
 
 
 # ---------------------------------------------------------------- delta queue
+
 
 def _raw_files(ws: Workspace) -> dict[str, Path]:
     out = {}
@@ -107,10 +118,15 @@ def _citing_pages(ws: Workspace, rel: str) -> list[str]:
 
 def write_queue(ws: Workspace, max_diff_lines: int = 250, log=print) -> dict:
     q = compute_queue(ws)
-    lines = [f"# Wiki ingest queue ({now_iso()})", "",
-             "Process with `/kb-wiki-ingest`. After each file is fully integrated, run "
-             "`kbmail wiki mark <path>` (or `kbmail wiki mark --all` at the end).", "",
-             f"## New raw files ({len(q['new'])})", ""]
+    lines = [
+        f"# Wiki ingest queue ({now_iso()})",
+        "",
+        "Process with `/kb-wiki-ingest`. After each file is fully integrated, run "
+        "`kbmail wiki mark <path>` (or `kbmail wiki mark --all` at the end).",
+        "",
+        f"## New raw files ({len(q['new'])})",
+        "",
+    ]
     for rel in q["new"]:
         size = ws.path(rel).stat().st_size
         lines.append(f"- `{rel}` ({size // 1024 + 1} KB)")
@@ -120,9 +136,16 @@ def write_queue(ws: Workspace, max_diff_lines: int = 250, log=print) -> dict:
         old = snap.read_text(encoding="utf-8").splitlines() if snap.exists() else []
         new = ws.path(rel).read_text(encoding="utf-8").splitlines()
         diff = list(difflib.unified_diff(old, new, "ingested", "current", lineterm="", n=1))
-        lines += [f"### `{rel}`", f"Pages citing it: {', '.join(_citing_pages(ws, rel)) or 'none'}", "", "```diff",
-                  *diff[:max_diff_lines], *(["... (diff truncated; read the file)"] if len(diff) > max_diff_lines else []),
-                  "```", ""]
+        lines += [
+            f"### `{rel}`",
+            f"Pages citing it: {', '.join(_citing_pages(ws, rel)) or 'none'}",
+            "",
+            "```diff",
+            *diff[:max_diff_lines],
+            *(["... (diff truncated; read the file)"] if len(diff) > max_diff_lines else []),
+            "```",
+            "",
+        ]
     lines += ["", f"## Deleted raw files ({len(q['deleted'])}) - mark dependent claims stale or remove the source", ""]
     for rel in q["deleted"]:
         lines.append(f"- `{rel}` cited by: {', '.join(_citing_pages(ws, rel)) or 'none'}")
@@ -169,6 +192,7 @@ def mark(ws: Workspace, paths: list[str], all_queued: bool = False, log=print) -
 
 # ---------------------------------------------------------------- pages / graph
 
+
 def load_pages(ws: Workspace) -> dict[str, dict]:
     """{'people/sarah-tanaka': {'meta':..., 'body':..., 'path':...}} keyed by path under wiki/ without .md."""
     out = {}
@@ -192,6 +216,7 @@ def _resolver(pages: dict[str, dict]):
     def resolve(target: str) -> str | None:
         t = target.strip().removesuffix(".md").lstrip("/").removeprefix("wiki/").lower()
         return by_key.get(t) or by_stem.get(t) or by_stem.get(t.split("/")[-1])
+
     return resolve
 
 
@@ -208,8 +233,15 @@ def build_graph(ws: Workspace, pages: dict | None = None) -> dict:
             if not isinstance(rel, dict) or not rel.get("target"):
                 continue
             t = resolve(str(rel["target"]).strip("[]"))
-            edges.append({"from": k, "to": t or str(rel["target"]), "type": rel.get("type", "related_to"),
-                          "confidence": rel.get("confidence"), "resolved": bool(t)})
+            edges.append(
+                {
+                    "from": k,
+                    "to": t or str(rel["target"]),
+                    "type": rel.get("type", "related_to"),
+                    "confidence": rel.get("confidence"),
+                    "resolved": bool(t),
+                }
+            )
     nodes = {k: {"title": pg["meta"].get("title", k), "type": pg["meta"].get("type", "")} for k, pg in pages.items()}
     graph = {"built": now_iso(), "nodes": nodes, "edges": edges}
     ws.save_json(GRAPH, graph)
@@ -252,6 +284,7 @@ def graph_mermaid(graph: dict, center: str, depth: int = 1) -> str:
 
 # ---------------------------------------------------------------- lifecycle
 
+
 def effective_confidence(ws: Workspace, meta: dict, today: datetime | None = None) -> float | None:
     try:
         conf = float(meta.get("confidence"))
@@ -270,14 +303,16 @@ def lint(ws: Workspace, log=print) -> dict:
     pages = load_pages(ws)
     resolve = _resolver(pages)
     graph = build_graph(ws, pages)
-    inbound: dict[str, int] = {k: 0 for k in pages}
+    inbound: dict[str, int] = dict.fromkeys(pages, 0)
     for e in graph["edges"]:
         if e["to"] in inbound and e["from"] != e["to"]:
             inbound[e["to"]] += 1
     index_text = ws.path("wiki/index.md").read_text(encoding="utf-8") if ws.path("wiki/index.md").exists() else ""
     stale_below = ws.cfg("wiki.stale_below", 0.35)
-    issues: dict[str, list[str]] = {k: [] for k in ("frontmatter", "broken_links", "missing_sources", "orphans",
-                                                    "not_in_index", "stale", "supersession")}
+    issues: dict[str, list[str]] = {
+        k: []
+        for k in ("frontmatter", "broken_links", "missing_sources", "orphans", "not_in_index", "stale", "supersession")
+    }
     for k, pg in pages.items():
         name = k.split("/")[-1] + ".md"
         if name in SPECIAL_PAGES or k.startswith("_"):
@@ -302,8 +337,10 @@ def lint(ws: Workspace, log=print) -> dict:
             issues["not_in_index"].append(pg["path"])
         eff = effective_confidence(ws, meta)
         if meta.get("status", "active") == "active" and eff is not None and eff < stale_below:
-            issues["stale"].append(f"{pg['path']}: effective confidence {eff} (stored {meta.get('confidence')}, "
-                                   f"last_confirmed {meta.get('last_confirmed') or meta.get('updated')})")
+            issues["stale"].append(
+                f"{pg['path']}: effective confidence {eff} (stored {meta.get('confidence')}, "
+                f"last_confirmed {meta.get('last_confirmed') or meta.get('updated')})"
+            )
         if meta.get("status") == "superseded" and not meta.get("superseded_by"):
             issues["supersession"].append(f"{pg['path']}: superseded but no superseded_by")
     lines = [f"# Wiki lint ({now_iso()})", "", f"{len(pages)} page(s). Fix with `/kb-wiki-lint`.", ""]
@@ -319,6 +356,7 @@ def lint(ws: Workspace, log=print) -> dict:
 
 
 # ---------------------------------------------------------------- search
+
 
 def search(ws: Workspace, query: str, limit: int = 10, include_raw: bool = False, expand: bool = True) -> list[dict]:
     """Hybrid search: BM25 over pages + graph expansion, fused with reciprocal rank fusion."""
@@ -344,7 +382,7 @@ def search(ws: Workspace, query: str, limit: int = 10, include_raw: bool = False
                     gscore[n] = gscore.get(n, 0) + s / (d + 1)
         rankings.append([k for k, _ in sorted(gscore.items(), key=lambda kv: -kv[1])])
     fused: dict[str, float] = {}
-    for weight, r in zip((1.0, 0.5), rankings):  # graph neighbours count half as much as direct hits
+    for weight, r in zip((1.0, 0.5), rankings, strict=False):  # graph neighbours count half as much as direct hits
         for rank, k in enumerate(r):
             fused[k] = fused.get(k, 0) + weight / (60 + rank)
     results = []
@@ -359,13 +397,26 @@ def search(ws: Workspace, query: str, limit: int = 10, include_raw: bool = False
         adj = s * (0.7 + 0.3 * eff) if eff is not None else s
         if pg["meta"].get("status") == "superseded":
             adj *= 0.5
-        results.append({"key": k, "path": pg["path"], "title": pg["meta"].get("title", k), "score": adj,
-                        "kind": pg["meta"].get("type", ""), "confidence": eff})
+        results.append(
+            {
+                "key": k,
+                "path": pg["path"],
+                "title": pg["meta"].get("title", k),
+                "score": adj,
+                "kind": pg["meta"].get("type", ""),
+                "confidence": eff,
+            }
+        )
     results.sort(key=lambda r: -r["score"])
     return results[:limit]
 
 
 def status(ws: Workspace) -> dict:
     q = compute_queue(ws)
-    return {"pages": len(load_pages(ws)), "queue_new": len(q["new"]), "queue_changed": len(q["changed"]),
-            "queue_deleted": len(q["deleted"]), "raw_ingested": len(ws.load_json(MANIFEST, {}))}
+    return {
+        "pages": len(load_pages(ws)),
+        "queue_new": len(q["new"]),
+        "queue_changed": len(q["changed"]),
+        "queue_deleted": len(q["deleted"]),
+        "raw_ingested": len(ws.load_json(MANIFEST, {})),
+    }

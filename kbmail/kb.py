@@ -17,8 +17,15 @@ import shutil
 from pathlib import Path
 
 from kbmail import images as imgs
-from kbmail.convert import (ANY_IMG_RE, CID_IMG_RE, CONVERTIBLE_EXT, DATA_IMG_RE, file_to_markdown,
-                            html_to_markdown, office_media)
+from kbmail.convert import (
+    ANY_IMG_RE,
+    CID_IMG_RE,
+    CONVERTIBLE_EXT,
+    DATA_IMG_RE,
+    file_to_markdown,
+    html_to_markdown,
+    office_media,
+)
 from kbmail.labels import load_labels
 from kbmail.records import fmt_people, fmt_person, message_index, read_message, threads
 from kbmail.redact import redact
@@ -55,6 +62,7 @@ def eligible_threads(ws: Workspace) -> dict[str, dict]:
 
 # ---------------------------------------------------------------- selection
 
+
 def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str]:
     sel = ws.load_json(SELECTION, {})
     state = ws.load_json(SELECT_BATCHES, {"next": 1, "open": {}})
@@ -74,31 +82,45 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
     chars = min(ws.cfg("kb.message_chars", 6000), 2500)
     written = []
     for start in range(0, len(todo), batch_threads):
-        chunk = todo[start: start + batch_threads]
+        chunk = todo[start : start + batch_threads]
         name = f"batch_{state['next']:03d}"
         state["next"] += 1
         result = f"{SELECT_DIR}/{name}.result.jsonl"
-        lines = [f"# KB selection {name} ({len(chunk)} threads)", "",
-                 "Decide which threads contain durable knowledge worth adding to the knowledge base",
-                 "(decisions, specifications, how-tos, explanations, status of projects, who owns what, numbers, dates).",
-                 "Skip pure logistics, thanks, scheduling ping-pong, newsletters, and duplicates.", "",
-                 f"Write **`{result}`**, one JSON object per thread:", "",
-                 '```json\n{"thread": "t0123456789a", "decision": "select", "title": "Short descriptive title", '
-                 '"reason": "why", "topics": ["..."], "messages": "all", "attachments": "all", '
-                 '"questions": ["What is system XYZ? (need a link to its docs)"]}\n```', "",
-                 "- `decision`: `select` or `skip`.",
-                 "- `messages`: `all` or a list of message ids to keep (drop pure 'thanks' replies).",
-                 "- `attachments`: `all`, `none`, or a list of attachment file names worth converting.",
-                 "- `questions`: things you could not understand (acronyms, systems, missing context, links the user "
-                 "should provide). They are copied to review/questions.yaml for the user.", "", "## Threads", ""]
+        lines = [
+            f"# KB selection {name} ({len(chunk)} threads)",
+            "",
+            "Decide which threads contain durable knowledge worth adding to the knowledge base",
+            "(decisions, specifications, how-tos, explanations, status of projects, who owns what, numbers, dates).",
+            "Skip pure logistics, thanks, scheduling ping-pong, newsletters, and duplicates.",
+            "",
+            f"Write **`{result}`**, one JSON object per thread:",
+            "",
+            '```json\n{"thread": "t0123456789a", "decision": "select", "title": "Short descriptive title", '
+            '"reason": "why", "topics": ["..."], "messages": "all", "attachments": "all", '
+            '"questions": ["What is system XYZ? (need a link to its docs)"]}\n```',
+            "",
+            "- `decision`: `select` or `skip`.",
+            "- `messages`: `all` or a list of message ids to keep (drop pure 'thanks' replies).",
+            "- `attachments`: `all`, `none`, or a list of attachment file names worth converting.",
+            "- `questions`: things you could not understand (acronyms, systems, missing context, links the user "
+            "should provide). They are copied to review/questions.yaml for the user.",
+            "",
+            "## Threads",
+            "",
+        ]
         for tid, t, prev in chunk:
             msgs = t["messages"]
-            lines += [f"## Thread {tid}", f"- areas: {', '.join(t['areas'])}",
-                      f"- subject: {msgs[-1].get('subject', '')}",
-                      f"- {len(msgs)} message(s), {msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]}"]
+            lines += [
+                f"## Thread {tid}",
+                f"- areas: {', '.join(t['areas'])}",
+                f"- subject: {msgs[-1].get('subject', '')}",
+                f"- {len(msgs)} message(s), {msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]}",
+            ]
             if prev:
-                lines.append(f"- previously: **{prev['decision']}** ({prev.get('reason', '')}); "
-                             f"new messages arrived since - reassess the whole thread")
+                lines.append(
+                    f"- previously: **{prev['decision']}** ({prev.get('reason', '')}); "
+                    f"new messages arrived since - reassess the whole thread"
+                )
             lines.append("")
             for i, m in enumerate(msgs):
                 try:
@@ -107,25 +129,36 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
                     body = ""
                 text = body if i == 0 else strip_quoted(body)
                 atts = [a["name"] for a in m.get("attachments") or [] if not a.get("inline")]
-                lines += [f"### {m['id']} | {m.get('date', '')[:16]} | {fmt_person(m.get('from'))}",
-                          f"to: {fmt_people(m.get('to'), 5)}"]
+                lines += [
+                    f"### {m['id']} | {m.get('date', '')[:16]} | {fmt_person(m.get('from'))}",
+                    f"to: {fmt_people(m.get('to'), 5)}",
+                ]
                 if atts:
                     lines.append(f"attachments: {', '.join(atts)}")
                 lines += ["", redact(compact(text, chars))[0], ""]
         p = ws.path(SELECT_DIR, f"{name}.md")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("\n".join(lines), encoding="utf-8")
-        state["open"][name] = {"threads": [t[0] for t in chunk], "file": ws.rel(p), "result": result, "created": now_iso(),
-                               "ids": {tid: [m["id"] for m in t["messages"]] for tid, t, _ in chunk}}
+        state["open"][name] = {
+            "threads": [t[0] for t in chunk],
+            "file": ws.rel(p),
+            "result": result,
+            "created": now_iso(),
+            "ids": {tid: [m["id"] for m in t["messages"]] for tid, t, _ in chunk},
+        }
         written.append(ws.rel(p))
     ws.save_json(SELECT_BATCHES, state)
     ws.record_run("kb_prepare", batches=len(written), threads=len(todo))
-    log(f"Wrote {len(written)} KB selection batch(es) for {len(todo)} thread(s). Next: /kb-select, then `kbmail kb import`.")
+    log(
+        f"Wrote {len(written)} KB selection batch(es) for {len(todo)} thread(s). "
+        "Next: /kb-select, then `kbmail kb import`."
+    )
     return written
 
 
 def import_select(ws: Workspace, log=print) -> dict:
     from kbmail.questions import add_question
+
     sel = ws.load_json(SELECTION, {})
     state = ws.load_json(SELECT_BATCHES, {"next": 1, "open": {}})
     stats = {"select": 0, "skip": 0, "errors": 0, "questions": 0}
@@ -146,10 +179,16 @@ def import_select(ws: Workspace, log=print) -> dict:
                 stats["errors"] += 1
                 log(f"  {name} line {n}: {e}")
                 continue
-            sel[tid] = {"decision": obj["decision"], "title": obj.get("title", ""), "reason": obj.get("reason", ""),
-                        "topics": obj.get("topics", []), "messages": obj.get("messages", "all"),
-                        "attachments": obj.get("attachments", "all"), "assessed_ids": b["ids"][tid],
-                        "assessed_at": now_iso()}
+            sel[tid] = {
+                "decision": obj["decision"],
+                "title": obj.get("title", ""),
+                "reason": obj.get("reason", ""),
+                "topics": obj.get("topics", []),
+                "messages": obj.get("messages", "all"),
+                "attachments": obj.get("attachments", "all"),
+                "assessed_ids": b["ids"][tid],
+                "assessed_at": now_iso(),
+            }
             stats[obj["decision"]] += 1
             for q in obj.get("questions") or []:
                 add_question(ws, q, context=f"thread {tid}: {obj.get('title', '')}", step="kb-select")
@@ -169,6 +208,7 @@ def import_select(ws: Workspace, log=print) -> dict:
 
 # ---------------------------------------------------------------- conversion
 
+
 def _signature(msgs: list[dict]) -> str:
     return short_hash("|".join(f"{m['id']}:{m.get('updated_at', '')}" for m in msgs), 10)
 
@@ -184,8 +224,11 @@ def _raw_target(ws: Workspace, tid: str, msgs: list[dict], areas: list[str], tit
 def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, first: bool, att_choice) -> list[str]:
     meta, body = read_message(ws, m)
     ctx = f"{m.get('date', '')[:10]} '{m.get('subject', '')}' from {fmt_person(m.get('from'))}"
-    cid_files = {a["content_id"]: ws.path(a["file"]) for a in meta.get("attachments") or []
-                 if a.get("content_id") and a.get("file") and ws.path(a["file"]).exists()}
+    cid_files = {
+        a["content_id"]: ws.path(a["file"])
+        for a in meta.get("attachments") or []
+        if a.get("content_id") and a.get("file") and ws.path(a["file"]).exists()
+    }
     if meta.get("html_file") and ws.path(meta["html_file"]).exists():
         text = html_to_markdown(ws.path(meta["html_file"]))
         text = CID_IMG_RE.sub(lambda mm: f"[[CID:{mm.group(1)}]]" if mm.group(1) in cid_files else "", text)
@@ -198,17 +241,23 @@ def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, first: bool, a
 
     def _inline(mm):  # register only inline images that survive quote stripping
         f = cid_files[mm.group(1)]
-        iid = imgs.register(ws, reg, f.read_bytes(), f.suffix,
-                            {"thread": tid, "message": m["id"], "origin": "inline", "context": ctx})
+        iid = imgs.register(
+            ws, reg, f.read_bytes(), f.suffix, {"thread": tid, "message": m["id"], "origin": "inline", "context": ctx}
+        )
         return IMG_MARK.format(iid) if iid else ""
+
     text = re.sub(r"\[\[CID:([^\]]+)\]\]", _inline, text)
-    out = [f"## Message {m['id']}", "",
-           f"- date: {m.get('date', '')}", f"- from: {fmt_person(m.get('from'))}",
-           f"- to: {fmt_people(m.get('to'), 20)}"]
+    out = [
+        f"## Message {m['id']}",
+        "",
+        f"- date: {m.get('date', '')}",
+        f"- from: {fmt_person(m.get('from'))}",
+        f"- to: {fmt_people(m.get('to'), 20)}",
+    ]
     if m.get("cc"):
         out.append(f"- cc: {fmt_people(m.get('cc'), 20)}")
     out += [f"- subject: {m.get('subject', '')}", "", text.strip(), ""]
-    for i, a in enumerate(meta.get("attachments") or []):
+    for a in meta.get("attachments") or []:
         if a.get("inline") and a.get("content_id") in cid_files and meta.get("html_file"):
             continue  # inline image, already placed in the body
         if att_choice != "all" and (att_choice == "none" or a["name"] not in (att_choice or [])):
@@ -228,8 +277,10 @@ def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, first: bool, a
             md, err = file_to_markdown(f)
             md = ANY_IMG_RE.sub("", md)
             out += [md.strip() if not err else f"(conversion failed: {err})", ""]
-            media = [imgs.register(ws, reg, data, Path(n).suffix, {**src, "origin": f"{a['name']}:{n}"})
-                     for n, data in office_media(f)]
+            media = [
+                imgs.register(ws, reg, data, Path(n).suffix, {**src, "origin": f"{a['name']}:{n}"})
+                for n, data in office_media(f)
+            ]
             media = [x for x in media if x]
             if media:
                 out += [f"Images inside {a['name']}:", "", *[IMG_MARK.format(x) for x in media], ""]
@@ -262,9 +313,15 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
             continue
         areas = (t or {}).get("areas") or (prev or {}).get("areas") or []
         target = (prev or {}).get("raw_target") or _raw_target(ws, tid, msgs, areas, s.get("title", ""))
-        parts = [f"# {s.get('title') or msgs[-1].get('subject', '')}", "",
-                 f"- thread: {tid}", f"- areas: {', '.join(areas)}", f"- topics: {', '.join(s.get('topics', []))}",
-                 f"- messages: {len(msgs)} ({msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]})", ""]
+        parts = [
+            f"# {s.get('title') or msgs[-1].get('subject', '')}",
+            "",
+            f"- thread: {tid}",
+            f"- areas: {', '.join(areas)}",
+            f"- topics: {', '.join(s.get('topics', []))}",
+            f"- messages: {len(msgs)} ({msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]})",
+            "",
+        ]
         for i, m in enumerate(msgs):
             parts += _convert_message(ws, reg, tid, m, i == 0, s.get("attachments", "all"))
         text = "\n".join(parts)
@@ -274,15 +331,25 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
         d = ws.path(CONVERT_DIR, tid)
         d.mkdir(parents=True, exist_ok=True)
         (d / "thread.src.md").write_text(text, encoding="utf-8")
-        conv[tid] = {"signature": sig, "converted_at": now_iso(), "raw_target": target, "areas": areas,
-                     "title": s.get("title", ""), "message_ids": [m["id"] for m in msgs],
-                     "images": sorted(set(_markers(text))), "formatted": False}
+        conv[tid] = {
+            "signature": sig,
+            "converted_at": now_iso(),
+            "raw_target": target,
+            "areas": areas,
+            "title": s.get("title", ""),
+            "message_ids": [m["id"] for m in msgs],
+            "images": sorted(set(_markers(text))),
+            "formatted": False,
+        }
         stats["converted"] += 1
     imgs.save(ws, reg)
     imgs.write_review_files(ws, reg)
     ws.save_json(CONVERTED, conv)
     ws.record_run("kb_convert", **stats)
-    log(f"Converted {stats['converted']} thread(s) ({stats['unchanged']} unchanged, {stats['redactions']} redaction(s)).")
+    log(
+        f"Converted {stats['converted']} thread(s) "
+        f"({stats['unchanged']} unchanged, {stats['redactions']} redaction(s))."
+    )
     write_queue(ws, log=log)
     return stats
 
@@ -323,20 +390,28 @@ def write_queue(ws: Workspace, log=print) -> dict:
         ws.path(CONVERT_DIR, tid, "thread.md").write_text(text, encoding="utf-8")
         (blocked if pending else ready).append((tid, e, pending))
     ws.save_json(CONVERTED, conv)
-    lines = ["# Format queue", "", f"Generated {now_iso()} by `kbmail kb convert` / `kbmail kb queue`.",
-             "Run `/kb-format` in Copilot Chat. For each READY thread: read `source`, write `target` "
-             "(see the prompt for the format) and copy `source_version` into the target's front matter.", "",
-             f"## Ready ({len(ready)})", ""]
+    lines = [
+        "# Format queue",
+        "",
+        f"Generated {now_iso()} by `kbmail kb convert` / `kbmail kb queue`.",
+        "Run `/kb-format` in Copilot Chat. For each READY thread: read `source`, write `target` "
+        "(see the prompt for the format) and copy `source_version` into the target's front matter.",
+        "",
+        f"## Ready ({len(ready)})",
+        "",
+    ]
     for tid, e, _ in ready:
         exists = ws.path(e["raw_target"]).exists()
-        lines += [f"- thread `{tid}`: {e.get('title', '')}",
-                  f"  - source: `{CONVERT_DIR}/{tid}/thread.md`",
-                  f"  - target: `{e['raw_target']}`" + (" (exists: UPDATE it, keep earlier content)" if exists else ""),
-                  f"  - source_version: `{e['signature']}`", f"  - areas: {', '.join(e.get('areas', []))}"]
+        lines += [
+            f"- thread `{tid}`: {e.get('title', '')}",
+            f"  - source: `{CONVERT_DIR}/{tid}/thread.md`",
+            f"  - target: `{e['raw_target']}`" + (" (exists: UPDATE it, keep earlier content)" if exists else ""),
+            f"  - source_version: `{e['signature']}`",
+            f"  - areas: {', '.join(e.get('areas', []))}",
+        ]
     lines += ["", f"## Blocked on image descriptions ({len(blocked)})", ""]
     for tid, e, pending in blocked:
-        lines.append(f"- `{tid}` {e.get('title', '')}: waiting for {', '.join(pending)} "
-                     "(see review/images/REVIEW.md)")
+        lines.append(f"- `{tid}` {e.get('title', '')}: waiting for {', '.join(pending)} (see review/images/REVIEW.md)")
     lines += ["", f"Already formatted: {done}"]
     p = ws.path(CONVERT_DIR, "QUEUE.md")
     p.parent.mkdir(parents=True, exist_ok=True)

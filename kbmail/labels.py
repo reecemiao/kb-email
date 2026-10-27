@@ -36,17 +36,26 @@ def save_labels(ws: Workspace, labels: dict) -> None:
     ws.save_json(LABELS, labels)
 
 
-def set_label(labels: dict, mid: str, areas: list[str], status: str, source: str,
-              confidence=None, reason: str = "") -> None:
+def set_label(
+    labels: dict, mid: str, areas: list[str], status: str, source: str, confidence=None, reason: str = ""
+) -> None:
     prev = labels.get(mid)
     hist = (prev or {}).get("history", [])
     if prev:
         hist = [*hist, {k: prev.get(k) for k in ("labels", "status", "source", "updated")}][-10:]
-    labels[mid] = {"labels": areas, "status": status, "source": source, "confidence": confidence,
-                   "reason": reason, "updated": now_iso(), "history": hist}
+    labels[mid] = {
+        "labels": areas,
+        "status": status,
+        "source": source,
+        "confidence": confidence,
+        "reason": reason,
+        "updated": now_iso(),
+        "history": hist,
+    }
 
 
 # ---------------------------------------------------------------- batches for Copilot
+
 
 def _area_block(ws: Workspace) -> list[str]:
     lines = []
@@ -59,6 +68,7 @@ def _area_block(ws: Workspace) -> list[str]:
 
 def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | None = None, log=print) -> list[str]:
     from kbmail.rules import classify, features, load_rules
+
     batch_size = batch_size or ws.cfg("labeling.batch_size", 40)
     preview = ws.cfg("labeling.preview_chars", 700)
     labels = load_labels(ws)
@@ -73,17 +83,31 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
     rules = load_rules(ws)
     written = []
     for start in range(0, len(pending), batch_size):
-        chunk = pending[start: start + batch_size]
+        chunk = pending[start : start + batch_size]
         name = f"batch_{state['next']:03d}"
         state["next"] += 1
         result = f"{WORKDIR}/{name}.result.jsonl"
-        lines = [f"# Label batch {name} ({len(chunk)} messages)", "",
-                 "Assign each message to one or more areas, or `others`.", "", "## Areas", "", *_area_block(ws), "",
-                 "## Output", "",
-                 f"Write **`{result}`** with exactly one JSON object per line, one line per message below:", "",
-                 '```json\n{"id": "m0123456789a", "labels": ["area1"], "confidence": 0.85, "reason": "short why"}\n```',
-                 "", "confidence: 0.0-1.0, how sure you are. Use several labels only when the message is truly about several areas.",
-                 "", "## Messages", ""]
+        lines = [
+            f"# Label batch {name} ({len(chunk)} messages)",
+            "",
+            "Assign each message to one or more areas, or `others`.",
+            "",
+            "## Areas",
+            "",
+            *_area_block(ws),
+            "",
+            "## Output",
+            "",
+            f"Write **`{result}`** with exactly one JSON object per line, one line per message below:",
+            "",
+            '```json\n{"id": "m0123456789a", "labels": ["area1"], "confidence": 0.85, "reason": "short why"}\n```',
+            "",
+            "confidence: 0.0-1.0, how sure you are. "
+            "Use several labels only when the message is truly about several areas.",
+            "",
+            "## Messages",
+            "",
+        ]
         for rec in chunk:
             try:
                 _, body = read_message(ws, rec)
@@ -95,11 +119,15 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
                 if scores:
                     hint = "rule scores (below threshold): " + ", ".join(f"{a}={s:g}" for a, s in scores.items())
             atts = ", ".join(a["name"] for a in rec.get("attachments") or [] if not a.get("inline"))
-            lines += [f"### {rec['id']}",
-                      f"- {rec.get('date', '')[:16]} | {rec.get('source')} {rec.get('kind', '')} | {rec.get('folder', '')} | {rec.get('direction', '')}",
-                      f"- from: {fmt_person(rec.get('from'))}",
-                      f"- to: {fmt_people(rec.get('to'), 5)}" + (f" | cc: {fmt_people(rec.get('cc'), 4)}" if rec.get("cc") else ""),
-                      f"- subject: {rec.get('subject', '')}"]
+            lines += [
+                f"### {rec['id']}",
+                f"- {rec.get('date', '')[:16]} | {rec.get('source')} {rec.get('kind', '')} | "
+                f"{rec.get('folder', '')} | {rec.get('direction', '')}",
+                f"- from: {fmt_person(rec.get('from'))}",
+                f"- to: {fmt_people(rec.get('to'), 5)}"
+                + (f" | cc: {fmt_people(rec.get('cc'), 4)}" if rec.get("cc") else ""),
+                f"- subject: {rec.get('subject', '')}",
+            ]
             if atts:
                 lines.append(f"- attachments: {atts}")
             if hint:
@@ -109,12 +137,19 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
         p = ws.path(WORKDIR, f"{name}.md")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("\n".join(lines), encoding="utf-8")
-        state["open"][name] = {"ids": [r["id"] for r in chunk], "created": now_iso(), "file": ws.rel(p), "result": result}
+        state["open"][name] = {
+            "ids": [r["id"] for r in chunk],
+            "created": now_iso(),
+            "file": ws.rel(p),
+            "result": result,
+        }
         written.append(ws.rel(p))
     ws.save_json(BATCHES, state)
     ws.record_run("label_prepare", batches=len(written), messages=len(pending))
-    log(f"Wrote {len(written)} batch file(s) for {len(pending)} message(s) in {WORKDIR}/. "
-        "Next: run /kb-label in Copilot Chat, then `kbmail label import`.")
+    log(
+        f"Wrote {len(written)} batch file(s) for {len(pending)} message(s) in {WORKDIR}/. "
+        "Next: run /kb-label in Copilot Chat, then `kbmail label import`."
+    )
     return written
 
 
@@ -166,12 +201,15 @@ def import_results(ws: Workspace, log=print) -> dict:
     save_labels(ws, labels)
     ws.save_json(BATCHES, state)
     ws.record_run("label_import", **summary)
-    log(f"Imported {summary['imported']} label(s) from {summary['batches']} batch(es); "
-        f"{summary['errors']} bad line(s). Next: `kbmail review`.")
+    log(
+        f"Imported {summary['imported']} label(s) from {summary['batches']} batch(es); "
+        f"{summary['errors']} bad line(s). Next: `kbmail review`."
+    )
     return summary
 
 
 # ---------------------------------------------------------------- interactive review
+
 
 def _open_file(path) -> None:
     try:
@@ -185,7 +223,9 @@ def _open_file(path) -> None:
         print(f"(could not open {path}: {e})")
 
 
-def review_queue(ws: Workspace, source: str = "proposed", area: str | None = None, order: str = "confidence") -> list[str]:
+def review_queue(
+    ws: Workspace, source: str = "proposed", area: str | None = None, order: str = "confidence"
+) -> list[str]:
     labels = load_labels(ws)
     statuses = {"proposed": {"proposed"}, "auto": {"auto"}, "all": {"proposed", "auto"}}[source]
     ids = [m for m, v in labels.items() if v.get("status") in statuses and (not area or area in v["labels"])]
@@ -194,9 +234,15 @@ def review_queue(ws: Workspace, source: str = "proposed", area: str | None = Non
     return ids
 
 
-def interactive_review(ws: Workspace, source: str = "proposed", area: str | None = None,
-                       order: str = "confidence", accept_above: float | None = None,
-                       input_fn=input, out=print) -> dict:
+def interactive_review(
+    ws: Workspace,
+    source: str = "proposed",
+    area: str | None = None,
+    order: str = "confidence",
+    accept_above: float | None = None,
+    input_fn=input,
+    out=print,
+) -> dict:
     labels = load_labels(ws)
     index = message_index(ws)
     ids = [m for m in review_queue(ws, source, area, order) if m in index]
@@ -206,15 +252,19 @@ def interactive_review(ws: Workspace, source: str = "proposed", area: str | None
             c = labels[mid].get("confidence")
             if c is not None and c >= accept_above:
                 lab = labels[mid]
-                set_label(labels, mid, lab["labels"], "confirmed", "user", c, lab.get("reason", "") + " (bulk-accepted)")
+                set_label(
+                    labels, mid, lab["labels"], "confirmed", "user", c, lab.get("reason", "") + " (bulk-accepted)"
+                )
                 stats["confirmed"] += 1
                 ids.remove(mid)
         save_labels(ws, labels)
         out(f"Bulk-accepted {stats['confirmed']} label(s) with confidence >= {accept_above}.")
     choices = ws.labels_allowed
     menu = "  ".join(f"[{i}] {a}" for i, a in enumerate(choices, 1))
-    out(f"\n{len(ids)} label(s) to review. Keys: Enter=accept  1-{len(choices)} (e.g. 1,3)=set label(s)  "
-        "v=view full  o=open .md file  s=skip  b=back  q=save & quit\n")
+    out(
+        f"\n{len(ids)} label(s) to review. Keys: Enter=accept  1-{len(choices)} (e.g. 1,3)=set label(s)  "
+        "v=view full  o=open .md file  s=skip  b=back  q=save & quit\n"
+    )
     i = 0
     while 0 <= i < len(ids):
         mid = ids[i]
@@ -225,7 +275,10 @@ def interactive_review(ws: Workspace, source: str = "proposed", area: str | None
             body = ""
         conf = lab.get("confidence")
         out("-" * 78)
-        out(f"[{i + 1}/{len(ids)}] {mid}  {rec.get('date', '')[:16]}  {rec.get('folder', '')}/{rec.get('direction', '')}")
+        out(
+            f"[{i + 1}/{len(ids)}] {mid}  {rec.get('date', '')[:16]}  "
+            f"{rec.get('folder', '')}/{rec.get('direction', '')}"
+        )
         out(f"From: {fmt_person(rec.get('from'))}")
         out(f"To:   {fmt_people(rec.get('to'), 4)}")
         out(f"Subj: {rec.get('subject', '')}")
@@ -260,8 +313,7 @@ def interactive_review(ws: Workspace, source: str = "proposed", area: str | None
                 continue
             if OTHERS in picked and len(picked) > 1:
                 picked = [p for p in picked if p != OTHERS]
-            set_label(labels, mid, picked, "confirmed", "user", 1.0,
-                      f"changed by user from {lab['labels']}")
+            set_label(labels, mid, picked, "confirmed", "user", 1.0, f"changed by user from {lab['labels']}")
             stats["changed"] += 1
         save_labels(ws, labels)
         i += 1
@@ -289,10 +341,22 @@ def export_csv(ws: Workspace, source: str = "proposed", log=print) -> str:
             if not rec:
                 continue
             lab = labels[mid]
-            w.writerow([mid, rec.get("date", "")[:16], (rec.get("from") or {}).get("email", ""), rec.get("subject", ""),
-                        ";".join(lab["labels"]), lab.get("confidence"), lab.get("reason", ""), ""])
-    log(f"Wrote {ws.rel(p)}. Fill 'decision' with: ok | area names separated by ';' | blank = undecided. "
-        "Then `kbmail review import-csv`.")
+            w.writerow(
+                [
+                    mid,
+                    rec.get("date", "")[:16],
+                    (rec.get("from") or {}).get("email", ""),
+                    rec.get("subject", ""),
+                    ";".join(lab["labels"]),
+                    lab.get("confidence"),
+                    lab.get("reason", ""),
+                    "",
+                ]
+            )
+    log(
+        f"Wrote {ws.rel(p)}. Fill 'decision' with: ok | area names separated by ';' | blank = undecided. "
+        "Then `kbmail review import-csv`."
+    )
     return ws.rel(p)
 
 

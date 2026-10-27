@@ -29,8 +29,9 @@ unchanged. Getting the messages out is the hard part. It depends on your tenant'
      client_id: 00000000-0000-0000-0000-000000000000
      days: 30
    ```
-3. `pip install -e ".[teams]"`, then `kbmail teams export --days 30`. The first run prints a device
-   code to enter at https://microsoft.com/devicelogin. The token is cached in `state/msal_cache.bin`
+3. Install with the Teams extra (`uv tool install -e ".[teams]"` from the clone), then
+   `kbmail teams export --days 30`. The first run prints a device code to enter at
+   https://microsoft.com/devicelogin. The token is cached in `state/msal_cache.bin`
    (git-ignored) and refreshed silently afterwards.
 4. Later: `kbmail teams export` (delta per chat via `lastModifiedDateTime`), or `kbmail sync --teams`.
 

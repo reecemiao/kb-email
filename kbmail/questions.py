@@ -43,8 +43,17 @@ def add_question(ws: Workspace, question: str, context: str = "", step: str = "m
             return q["id"]
     nxt = max([int(q["id"][1:]) for q in qs if str(q.get("id", "")).startswith("q")] or [0]) + 1
     qid = f"q{nxt:04d}"
-    qs.append({"id": qid, "question": question.strip(), "context": context, "step": step,
-               "created": now_iso(), "status": "open", "answer": ""})
+    qs.append(
+        {
+            "id": qid,
+            "question": question.strip(),
+            "context": context,
+            "step": step,
+            "created": now_iso(),
+            "status": "open",
+            "answer": "",
+        }
+    )
     save(ws, qs)
     return qid
 
@@ -79,24 +88,39 @@ def ingest(ws: Workspace, fetch: bool = True, log=print) -> dict:
         return {"answers": 0, "pages": 0}
     day = datetime.now().strftime("%Y-%m-%d")
     pages = 0
-    body = [f"# Answers from the user ({day})", "",
-            "Authoritative context provided by the mailbox owner in answer to open questions.", ""]
+    body = [
+        f"# Answers from the user ({day})",
+        "",
+        "Authoritative context provided by the mailbox owner in answer to open questions.",
+        "",
+    ]
     for q in todo:
-        body += [f"## {q['question']}", "", f"- question id: {q['id']}", f"- context: {q.get('context', '')}", "",
-                 str(q["answer"]).strip(), ""]
+        body += [
+            f"## {q['question']}",
+            "",
+            f"- question id: {q['id']}",
+            f"- context: {q.get('context', '')}",
+            "",
+            str(q["answer"]).strip(),
+            "",
+        ]
         if fetch:
             for url in URL_RE.findall(str(q["answer"])):
                 text, err = url_to_markdown(url)
                 if err or not text.strip():
-                    log(f"  could not fetch {url}: {err or 'empty page'} - save the page (PDF/HTML) into raw/inbox/ "
-                        "and run `kbmail raw import`.")
+                    log(
+                        f"  could not fetch {url}: {err or 'empty page'} - save the page (PDF/HTML) into raw/inbox/ "
+                        "and run `kbmail raw import`."
+                    )
                     body.append(f"- link (not fetched, needs manual save): {url}")
                     continue
                 text, _ = redact(text, ws.cfg("privacy.extra_patterns", []))
                 p = ws.path("raw/web", f"{slugify(url.split('://', 1)[1], 80)}.md")
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(dump_frontmatter({"source_url": url, "fetched": now_iso(), "question": q["id"]}, text),
-                             encoding="utf-8")
+                p.write_text(
+                    dump_frontmatter({"source_url": url, "fetched": now_iso(), "question": q["id"]}, text),
+                    encoding="utf-8",
+                )
                 body.append(f"- linked page saved: [{url}]({'../web/' + p.name})")
                 pages += 1
         body.append("")

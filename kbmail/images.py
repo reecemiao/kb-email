@@ -46,8 +46,15 @@ def register(ws: Workspace, reg: dict, data: bytes, ext: str, source: dict) -> s
         p = ws.path(DIR, iid + ext)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
-        reg[iid] = {"file": ws.rel(p), "type": "svg" if ext in SVG_EXT else "image", "bytes": len(data),
-                    "status": "pending", "description": "", "sources": [], "created": now_iso()}
+        reg[iid] = {
+            "file": ws.rel(p),
+            "type": "svg" if ext in SVG_EXT else "image",
+            "bytes": len(data),
+            "status": "pending",
+            "description": "",
+            "sources": [],
+            "created": now_iso(),
+        }
     srcs = reg[iid]["sources"]
     if source not in srcs:
         srcs.append(source)
@@ -86,15 +93,28 @@ def write_review_files(ws: Workspace, reg: dict, vision: bool | None = None) -> 
     for iid, img in sorted(pending.items()):
         prev = existing.get(iid, {})
         ctx = "; ".join(s.get("context", "") for s in img["sources"][:3])
-        entries.append({"id": iid, "type": img["type"], "file": img["file"].split("/")[-1], "context": ctx,
-                        "description": prev.get("description", ""), "skip": bool(prev.get("skip", False))})
+        entries.append(
+            {
+                "id": iid,
+                "type": img["type"],
+                "file": img["file"].split("/")[-1],
+                "context": ctx,
+                "description": prev.get("description", ""),
+                "skip": bool(prev.get("skip", False)),
+            }
+        )
     ws.save_yaml(DESC, entries)
     who = "Copilot (/kb-images)" if vision else "you"
-    lines = ["# Images waiting for a description", "",
-             f"Described by: **{who}**. Fill `description` in `descriptions.yaml` (or set `skip: true`), "
-             "then run `kbmail images import`. Interactive alternative: `kbmail images describe`.", "",
-             "Good descriptions say what the image *means*: chart axes and trend, the architecture's boxes and arrows, "
-             "the key numbers in a screenshot, and which system/screen it is.", ""]
+    lines = [
+        "# Images waiting for a description",
+        "",
+        f"Described by: **{who}**. Fill `description` in `descriptions.yaml` (or set `skip: true`), "
+        "then run `kbmail images import`. Interactive alternative: `kbmail images describe`.",
+        "",
+        "Good descriptions say what the image *means*: chart axes and trend, the architecture's boxes and arrows, "
+        "the key numbers in a screenshot, and which system/screen it is.",
+        "",
+    ]
     svgs = [e for e in entries if e["type"] == "svg"]
     if svgs:
         lines += [f"{len(svgs)} SVG file(s) can be handled by Copilot even without vision: run `/kb-svg`.", ""]
@@ -136,8 +156,10 @@ def import_descriptions(ws: Workspace, log=print) -> dict:
 def interactive_describe(ws: Workspace, input_fn=input, out=print) -> dict:
     reg = load(ws)
     pending = [k for k, v in sorted(reg.items()) if v["status"] == "pending" and v["type"] == "image"]
-    out(f"{len(pending)} image(s) pending. For each: type a description (end with an empty line), "
-        "'s' = skip (irrelevant), 'n' = next/later, 'q' = quit.\n")
+    out(
+        f"{len(pending)} image(s) pending. For each: type a description (end with an empty line), "
+        "'s' = skip (irrelevant), 'n' = next/later, 'q' = quit.\n"
+    )
     n = 0
     for iid in pending:
         img = reg[iid]

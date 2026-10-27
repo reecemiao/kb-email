@@ -9,7 +9,7 @@ from kbmail.records import message_index
 from kbmail.status import collect
 from kbmail.textutil import dump_frontmatter, parse_frontmatter
 
-quiet = lambda *a, **k: None  # noqa: E731
+quiet = lambda *a, **k: None
 
 
 def _by_subject(ws):
@@ -52,11 +52,17 @@ def test_full_pipeline(ws, mailbox):
     assert sum(1 for v in labels.values() if v["labels"] == ["infra", "payments"]) == 1
 
     # 4. rules: Copilot writes rules.yaml, Python evaluates/commits
-    ws.save_yaml("config/rules.yaml", {"threshold": 2, "rules": [
-        {"id": "r001", "area": "others", "weight": 2, "when": {"from": ["noreply"]}},
-        {"id": "r002", "area": "payments", "weight": 2, "when": {"subject": ["re:payment|請求"]}},
-        {"id": "r003", "area": "bogus", "weight": 1, "when": {"subject": ["x"]}},
-    ]})
+    ws.save_yaml(
+        "config/rules.yaml",
+        {
+            "threshold": 2,
+            "rules": [
+                {"id": "r001", "area": "others", "weight": 2, "when": {"from": ["noreply"]}},
+                {"id": "r002", "area": "payments", "weight": 2, "when": {"subject": ["re:payment|請求"]}},
+                {"id": "r003", "area": "bogus", "weight": 1, "when": {"subject": ["x"]}},
+            ],
+        },
+    )
     assert rules.commit(ws, log=quiet) is False  # unknown area rejected
     data = ws.load_yaml("config/rules.yaml")
     data["rules"].pop()
@@ -75,9 +81,18 @@ def test_full_pipeline(ws, mailbox):
     for b in st["open"].values():
         for tid in b["threads"]:
             dec = "select" if any(msgs[s]["thread_id"] == tid for s in ("Payment API cut-over plan",)) else "skip"
-            lines.append(json.dumps({"thread": tid, "decision": dec, "title": "Payment API cut-over",
-                                     "messages": "all", "attachments": "all",
-                                     "questions": ["What is the rollback runbook URL?"] if dec == "select" else []}))
+            lines.append(
+                json.dumps(
+                    {
+                        "thread": tid,
+                        "decision": dec,
+                        "title": "Payment API cut-over",
+                        "messages": "all",
+                        "attachments": "all",
+                        "questions": ["What is the rollback runbook URL?"] if dec == "select" else [],
+                    }
+                )
+            )
         ws.path(b["result"]).write_text("\n".join(lines), encoding="utf-8")
     stats = kb.import_select(ws, log=quiet)
     assert stats["select"] == 1 and stats["questions"] == 1
@@ -120,9 +135,13 @@ def test_full_pipeline(ws, mailbox):
     conv = ws.load_json(kb.CONVERTED)[tid]
     target = ws.path(conv["raw_target"])
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(dump_frontmatter({"title": "Payment API cut-over", "thread": tid,
-                                        "source_version": conv["signature"]}, "# Payment API cut-over\n"),
-                      encoding="utf-8")
+    target.write_text(
+        dump_frontmatter(
+            {"title": "Payment API cut-over", "thread": tid, "source_version": conv["signature"]},
+            "# Payment API cut-over\n",
+        ),
+        encoding="utf-8",
+    )
     assert kb.write_queue(ws, log=quiet)["formatted"] == 1
 
     # 10. wiki delta: queue -> mark -> change -> diff in queue
@@ -150,14 +169,25 @@ def test_full_pipeline(ws, mailbox):
 def test_new_mail_after_rules_is_labeled_by_rules(ws, mailbox, tmp_path):
     import_eml(ws, [str(mailbox)], log=quiet)
     _label_everything(ws)
-    ws.save_yaml("config/rules.yaml", {"threshold": 2, "rules": [
-        {"id": "r001", "area": "others", "weight": 2, "when": {"from_domain": ["news.example.org"]}}]})
+    ws.save_yaml(
+        "config/rules.yaml",
+        {
+            "threshold": 2,
+            "rules": [{"id": "r001", "area": "others", "weight": 2, "when": {"from_domain": ["news.example.org"]}}],
+        },
+    )
     assert rules.commit(ws, log=quiet)
     from tests.conftest import make_eml
+
     d = tmp_path / "eml2"
     d.mkdir()
-    make_eml(d / "n.eml", subject="Another newsletter", frm="News <noreply@mail.news.example.org>",
-             to=["taro@contoso.com"], body="...")
+    make_eml(
+        d / "n.eml",
+        subject="Another newsletter",
+        frm="News <noreply@mail.news.example.org>",
+        to=["taro@contoso.com"],
+        body="...",
+    )
     import_eml(ws, [str(d)], log=quiet)
     rules.apply_rules(ws, log=quiet)
     lab = load_labels(ws)[_by_subject(ws)["Another newsletter"]["id"]]
@@ -166,13 +196,31 @@ def test_new_mail_after_rules_is_labeled_by_rules(ws, mailbox, tmp_path):
 
 
 def test_wiki_lint_and_search(ws):
-    page = dump_frontmatter({"title": "Payment API", "type": "system", "status": "active", "confidence": 0.9,
-                             "decay": "fast", "last_confirmed": "2020-01-01", "updated": "2020-01-01",
-                             "sources": ["raw/email/missing.md"],
-                             "relations": [{"type": "owned_by", "target": "people/sarah-tanaka"}]},
-                            "# Payment API\nIdempotency keys are required. See [[people/sarah-tanaka]] and [[nowhere]].")
-    person = dump_frontmatter({"title": "Sarah Tanaka", "type": "person", "status": "active", "confidence": 0.8,
-                               "updated": "2026-10-01", "sources": []}, "# Sarah\nOwns payments.")
+    page = dump_frontmatter(
+        {
+            "title": "Payment API",
+            "type": "system",
+            "status": "active",
+            "confidence": 0.9,
+            "decay": "fast",
+            "last_confirmed": "2020-01-01",
+            "updated": "2020-01-01",
+            "sources": ["raw/email/missing.md"],
+            "relations": [{"type": "owned_by", "target": "people/sarah-tanaka"}],
+        },
+        "# Payment API\nIdempotency keys are required. See [[people/sarah-tanaka]] and [[nowhere]].",
+    )
+    person = dump_frontmatter(
+        {
+            "title": "Sarah Tanaka",
+            "type": "person",
+            "status": "active",
+            "confidence": 0.8,
+            "updated": "2026-10-01",
+            "sources": [],
+        },
+        "# Sarah\nOwns payments.",
+    )
     ws.path("wiki/systems").mkdir(parents=True)
     ws.path("wiki/people").mkdir(parents=True)
     ws.path("wiki/systems/payment-api.md").write_text(page, encoding="utf-8")

@@ -33,13 +33,18 @@ flowchart LR
 
 ## Install (Windows, classic Outlook)
 
+Uses [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv`). uv also installs a suitable
+Python if you don't have one.
+
 ```powershell
 git clone https://github.com/reecemiao/kb-email
 cd kb-email
-py -m venv .venv; .venv\Scripts\activate
-pip install -e .            # add [teams] for the Teams exporter: pip install -e ".[teams]"
-kbmail init C:\kb           # creates your private workspace (config, prompts, wiki skeleton)
+uv tool install -e ".[teams]"   # puts `kbmail` on PATH; drop [teams] if you don't need the Teams exporter
+kbmail init C:\kb               # creates your private workspace (config, prompts, wiki skeleton)
 ```
+
+`uv tool install -e` keeps the install linked to the clone, so `git pull` updates it (rerun the command
+when dependencies change). Then run `kbmail init C:\kb --upgrade` to refresh the workspace's prompt files.
 
 Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords, `copilot.vision`), then open
 `C:\kb` in VS Code with Copilot Chat in **Agent** mode. Type `/kb-start` and Copilot walks you through
@@ -99,7 +104,7 @@ Schedule the deterministic part daily with Windows Task Scheduler (Outlook COM n
 session, so choose "Run only when user is logged on"):
 
 ```powershell
-schtasks /Create /SC DAILY /ST 08:30 /TN kbmail-sync /TR "cmd /c cd /d C:\kb && C:\kb-email\.venv\Scripts\kbmail.exe sync >> state\sync.log 2>&1"
+schtasks /Create /SC DAILY /ST 08:30 /TN kbmail-sync /TR "cmd /c cd /d C:\kb && %USERPROFILE%\.local\bin\kbmail.exe sync >> state\sync.log 2>&1"
 ```
 
 When you next open VS Code, `/kb-sync` picks up the prepared queues.
@@ -120,14 +125,25 @@ app registration your tenant allows. An experimental Outlook route reads the hid
 
 ## Development
 
+Tooling: [uv](https://docs.astral.sh/uv/) for environments and the lockfile, [ruff](https://docs.astral.sh/ruff/)
+for linting and formatting (config in `pyproject.toml`), [pre-commit](https://pre-commit.com/) to run both
+on every commit.
+
 ```bash
-pip install -e ".[dev]"
-pytest
+uv sync --all-extras          # .venv with runtime + Teams extras + dev group (pytest, ruff, pre-commit)
+uv run pre-commit install     # hooks for commit (ruff, uv-lock, file hygiene) and push (pytest)
+uv run pytest                 # tests
+uv run ruff check --fix . && uv run ruff format .
+uv run kbmail --help          # run the CLI from the checkout
 ```
+
+Add dependencies with `uv add <pkg>` (or `uv add --group dev <pkg>`) so `uv.lock` stays in sync; the
+`uv-lock` hook rejects commits where it isn't.
 
 The tests run the whole pipeline on generated `.eml` files. They write the result files Copilot
 would write, then check export de-duplication, labeling import, interactive review, rule
 validation/evaluation/snapshots, KB selection with questions, markitdown conversion (HTML tables,
 docx, inline images, SVG), redaction, quote stripping, image description flow, wiki delta queue with
-diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 and Graph code paths need
-Windows/Outlook and a tenant, so they are not covered by CI.
+diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 exporter is tested against
+a fake Outlook object model. Real Outlook and the Graph (Teams) calls need Windows and a tenant, so test
+those on your machine.

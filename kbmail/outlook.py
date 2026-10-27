@@ -33,9 +33,22 @@ PR_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x39FE001E"
 PR_SENDER_SMTP = "http://schemas.microsoft.com/mapi/proptag/0x5D01001F"
 PR_INTERNET_MESSAGE_ID = "http://schemas.microsoft.com/mapi/proptag/0x1035001F"
 PR_ATTACH_CONTENT_ID = "http://schemas.microsoft.com/mapi/proptag/0x3712001F"
-SKIP_FOLDER_NAMES = {"deleted items", "junk email", "outbox", "drafts", "sync issues", "conversation history",
-                     "rss feeds", "rss subscriptions", "削除済みアイテム", "迷惑メール", "送信トレイ", "下書き",
-                     "同期の失敗", "会話の履歴"}
+SKIP_FOLDER_NAMES = {
+    "deleted items",
+    "junk email",
+    "outbox",
+    "drafts",
+    "sync issues",
+    "conversation history",
+    "rss feeds",
+    "rss subscriptions",
+    "削除済みアイテム",
+    "迷惑メール",
+    "送信トレイ",
+    "下書き",
+    "同期の失敗",
+    "会話の履歴",
+}
 
 EXPORT_STATE = "state/export_state.json"
 
@@ -79,6 +92,7 @@ def _safe(fn, default=None):
 
 # ---------------------------------------------------------------- addresses
 
+
 def sender_of(item) -> dict:
     name = _safe(lambda: item.SenderName, "")
     addr = _safe(lambda: item.SenderEmailAddress, "")
@@ -114,6 +128,7 @@ def recipients_of(item) -> dict[str, list[dict]]:
 
 # ---------------------------------------------------------------- folders
 
+
 def _walk(folder, include_subfolders: bool):
     yield folder
     if include_subfolders:
@@ -142,8 +157,9 @@ def folder_by_path(ns, path: str):
     return folder
 
 
-def resolve_folders(ns, folders: list[str], include_subfolders: bool, all_folders: bool,
-                    extra: list[str]) -> list[tuple[object, bool]]:
+def resolve_folders(
+    ns, folders: list[str], include_subfolders: bool, all_folders: bool, extra: list[str]
+) -> list[tuple[object, bool]]:
     """Return [(folder, is_sent)] to export."""
     sent_path = _safe(lambda: ns.GetDefaultFolder(5).FolderPath, "")
     chosen = []
@@ -174,6 +190,7 @@ def resolve_folders(ns, folders: list[str], include_subfolders: bool, all_folder
 
 
 # ---------------------------------------------------------------- mail export
+
 
 def _save_attachments(ws: Workspace, item, files_dir: Path, html: str, max_bytes: int) -> list[dict]:
     atts = []
@@ -214,7 +231,9 @@ def export_item(ws: Workspace, item, folder, is_sent: bool, index, force: bool) 
     mid = message_id_for(imid or entry_id)
     if mid in index and not force:
         return None
-    received = com_dt(_safe(lambda: item.ReceivedTime)) or com_dt(_safe(lambda: item.SentOn)) or datetime.now().astimezone()
+    received = (
+        com_dt(_safe(lambda: item.ReceivedTime)) or com_dt(_safe(lambda: item.SentOn)) or datetime.now().astimezone()
+    )
     sender = sender_of(item)
     recips = recipients_of(item)
     me = ws.me_emails
@@ -255,16 +274,23 @@ def export_item(ws: Workspace, item, folder, is_sent: bool, index, force: bool) 
             meta["html_file"] = ws.rel(files_dir / "body.html")
     meta["attachments"] = (
         _save_attachments(ws, item, files_dir, html, int(o["attachment_max_mb"] * 1_000_000))
-        if o["save_attachments"] else []
+        if o["save_attachments"]
+        else []
     )
     write_message(ws, meta, body)
     index.upsert(meta)
     return mid
 
 
-def export_mail(ws: Workspace, days: int | None = None, include_subfolders: bool | None = None,
-                all_folders: bool = False, folders: list[str] | None = None, force: bool = False,
-                log=print) -> dict:
+def export_mail(
+    ws: Workspace,
+    days: int | None = None,
+    include_subfolders: bool | None = None,
+    all_folders: bool = False,
+    folders: list[str] | None = None,
+    force: bool = False,
+    log=print,
+) -> dict:
     ns = connect()
     o = ws.config["outlook"]
     include_subfolders = o["include_subfolders"] if include_subfolders is None else include_subfolders
@@ -272,8 +298,9 @@ def export_mail(ws: Workspace, days: int | None = None, include_subfolders: bool
     index = message_index(ws)
     now = datetime.now().astimezone()
     summary = {"exported": 0, "skipped_existing": 0, "folders": {}}
-    for folder, is_sent in resolve_folders(ns, folders or o["folders"], include_subfolders, all_folders,
-                                           o.get("extra_folders") or []):
+    for folder, is_sent in resolve_folders(
+        ns, folders or o["folders"], include_subfolders, all_folders, o.get("extra_folders") or []
+    ):
         fpath = folder.FolderPath
         fstate = state["folders"].get(fpath, {})
         if days is not None:
@@ -318,6 +345,7 @@ def export_mail(ws: Workspace, days: int | None = None, include_subfolders: bool
 
 # ---------------------------------------------------------------- calendar
 
+
 def _calendar_window(items, start: datetime, end: datetime):
     """Restrict the (sorted, recurrence-expanded) calendar to [start, end].
 
@@ -343,8 +371,13 @@ def _attendees(item) -> list[dict]:
     kinds = {1: "required", 2: "optional", 3: "resource"}
     for i in range(1, _safe(lambda: recips.Count, 0) + 1):
         r = recips.Item(i)
-        out.append({"name": _safe(lambda: r.Name, ""), "email": recipient_smtp(r),
-                    "type": kinds.get(_safe(lambda: r.Type, 1), "required")})
+        out.append(
+            {
+                "name": _safe(lambda: r.Name, ""),
+                "email": recipient_smtp(r),
+                "type": kinds.get(_safe(lambda: r.Type, 1), "required"),
+            }
+        )
     return out
 
 
@@ -392,8 +425,10 @@ def export_calendar(ws: Workspace, days: int | None = None, future_days: int | N
             "start": st.isoformat(),
             "end": (com_dt(_safe(lambda: item.End)) or st).isoformat(),
             "location": location,
-            "organizer": {"name": _safe(lambda: org.Name, "") if org else _safe(lambda: item.Organizer, ""),
-                          "email": (_safe(lambda: org.GetExchangeUser().PrimarySmtpAddress, "") if org else "").lower()},
+            "organizer": {
+                "name": _safe(lambda: org.Name, "") if org else _safe(lambda: item.Organizer, ""),
+                "email": (_safe(lambda: org.GetExchangeUser().PrimarySmtpAddress, "") if org else "").lower(),
+            },
             "attendees": _attendees(item),
             "is_recurring": bool(_safe(lambda: item.IsRecurring, False)),
             "is_online": online,
@@ -418,18 +453,21 @@ def export_calendar(ws: Workspace, days: int | None = None, future_days: int | N
 
 # ---------------------------------------------------------------- drafts (never sends)
 
+
 def md_to_html(md: str) -> str:
     """Tiny Markdown -> HTML for email drafts (paragraphs, bullets, bold)."""
     import html as _html
+
+    bullet = re.compile(r"^\s*[-*]\s+")
     out = []
     for block in re.split(r"\n\s*\n", md.strip()):
         lines = block.splitlines()
-        if all(re.match(r"\s*[-*]\s+", ln) for ln in lines):
-            out.append("<ul>" + "".join(f"<li>{_inline(_html.escape(re.sub(r'^\s*[-*]\s+', '', ln)))}</li>"
-                                         for ln in lines) + "</ul>")
+        if all(bullet.match(ln) for ln in lines):
+            items = "".join(f"<li>{_inline(_html.escape(bullet.sub('', ln)))}</li>" for ln in lines)
+            out.append(f"<ul>{items}</ul>")
         else:
             out.append("<p>" + "<br>".join(_inline(_html.escape(ln)) for ln in lines) + "</p>")
-    return "<div style=\"font-family:Calibri,Meiryo,sans-serif;font-size:11pt\">" + "".join(out) + "</div>"
+    return '<div style="font-family:Calibri,Meiryo,sans-serif;font-size:11pt">' + "".join(out) + "</div>"
 
 
 def _inline(s: str) -> str:
@@ -438,6 +476,7 @@ def _inline(s: str) -> str:
 
 def create_outlook_draft(ws: Workspace, draft_path: str, log=print) -> None:
     from kbmail.textutil import parse_frontmatter
+
     meta, body = parse_frontmatter(ws.path(draft_path).read_text(encoding="utf-8"))
     ns = connect()
     app = ns.Application
@@ -446,8 +485,11 @@ def create_outlook_draft(ws: Workspace, draft_path: str, log=print) -> None:
         rec = message_index(ws).get(reply_to)
         if not rec or not rec.get("entry_id"):
             raise ValueError(f"reply_to {reply_to} not found in index (or has no entry_id)")
-        orig = (ns.GetItemFromID(rec["entry_id"], rec["store_id"]) if rec.get("store_id")
-                else ns.GetItemFromID(rec["entry_id"]))
+        orig = (
+            ns.GetItemFromID(rec["entry_id"], rec["store_id"])
+            if rec.get("store_id")
+            else ns.GetItemFromID(rec["entry_id"])
+        )
         mail = orig.ReplyAll() if meta.get("reply_all", True) else orig.Reply()
         mail.HTMLBody = md_to_html(body) + mail.HTMLBody
     else:

@@ -77,7 +77,7 @@ class Workspace:
 
     # ------------------------------------------------------------ discovery
     @classmethod
-    def find(cls, start: str | Path | None = None) -> "Workspace":
+    def find(cls, start: str | Path | None = None) -> Workspace:
         env = os.environ.get("KBMAIL_WORKSPACE")
         if start is None and env:
             start = env
@@ -103,9 +103,20 @@ class Workspace:
 
     def ensure_dirs(self) -> None:
         for d in (
-            "config", "data/messages", "data/calendar", "state", "work", "review/images",
-            "raw/email", "raw/teams", "raw/web", "raw/notes", "raw/docs", "raw/inbox",
-            "wiki", "drafts",
+            "config",
+            "data/messages",
+            "data/calendar",
+            "state",
+            "work",
+            "review/images",
+            "raw/email",
+            "raw/teams",
+            "raw/web",
+            "raw/notes",
+            "raw/docs",
+            "raw/inbox",
+            "wiki",
+            "drafts",
         ):
             self.path(d).mkdir(parents=True, exist_ok=True)
 
@@ -132,8 +143,13 @@ class Workspace:
         for a in self.config.get("areas") or []:
             if isinstance(a, str):
                 a = {"name": a}
-            out.append({"name": str(a["name"]).strip(), "description": a.get("description", ""),
-                        "keywords": a.get("keywords", []) or []})
+            out.append(
+                {
+                    "name": str(a["name"]).strip(),
+                    "description": a.get("description", ""),
+                    "keywords": a.get("keywords", []) or [],
+                }
+            )
         return out
 
     @property
@@ -204,8 +220,16 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "workspace"
 # leading underscore and renamed on copy.
 _RENAMES = {"_github": ".github", "_vscode": ".vscode", "_gitignore": ".gitignore"}
 # Files the user is expected to edit: never overwritten by `init --upgrade`.
-_USER_OWNED = {CONFIG_NAME, "config/rules.yaml", "config/people.yaml", "config/rules_journal.md",
-               "wiki/index.md", "wiki/log.md", "wiki/overview.md", "wiki/glossary.md"}
+_USER_OWNED = {
+    CONFIG_NAME,
+    "config/rules.yaml",
+    "config/people.yaml",
+    "config/rules_journal.md",
+    "wiki/index.md",
+    "wiki/log.md",
+    "wiki/overview.md",
+    "wiki/glossary.md",
+}
 
 
 def init_workspace(target: Path, upgrade: bool = False) -> list[str]:

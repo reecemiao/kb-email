@@ -40,8 +40,18 @@ def html_to_text(s: str) -> str:
 
 # ---------------------------------------------------------------- shared writer
 
-def write_chat_day(ws: Workspace, index, chat_key: str, title: str, chat_type: str, members: list[dict],
-                   day: str, messages: list[dict], origin: str) -> str:
+
+def write_chat_day(
+    ws: Workspace,
+    index,
+    chat_key: str,
+    title: str,
+    chat_type: str,
+    members: list[dict],
+    day: str,
+    messages: list[dict],
+    origin: str,
+) -> str:
     """Merge `messages` into the stored chat-day and (re)write its record. Returns record id."""
     raw_dir = ws.path("data/messages/teams/_raw", short_hash(chat_key, 12))
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -56,16 +66,26 @@ def write_chat_day(ws: Workspace, index, chat_key: str, title: str, chat_type: s
     speakers = [m["from"] for m in msgs if m["from"].get("email", "").lower() not in me]
     lead = max(speakers, key=lambda p: sum(1 for s in speakers if s == p)) if speakers else msgs[0]["from"]
     mid = message_id_for(f"teams|{chat_key}|{day}")
-    body = "\n\n".join(f"**{parse_dt(m['time']).strftime('%H:%M')} {m['from'].get('name') or m['from'].get('email')}**: {m['text']}"
-                       for m in msgs)
+    body = "\n\n".join(
+        f"**{parse_dt(m['time']).strftime('%H:%M')} {m['from'].get('name') or m['from'].get('email')}**: {m['text']}"
+        for m in msgs
+    )
     meta = {
-        "id": mid, "source": "teams", "kind": "chat", "folder": chat_type, "origin": origin,
+        "id": mid,
+        "source": "teams",
+        "kind": "chat",
+        "folder": chat_type,
+        "origin": origin,
         "direction": "sent" if not speakers else "received",
         "date": parse_dt(msgs[0]["time"]).astimezone().replace(microsecond=0).isoformat(),
-        "subject": title, "from": lead,
-        "to": [p for p in members if p != lead], "cc": [],
-        "conversation_id": chat_key, "conversation_topic": title,
-        "messages": len(msgs), "attachments": [],
+        "subject": title,
+        "from": lead,
+        "to": [p for p in members if p != lead],
+        "cc": [],
+        "conversation_id": chat_key,
+        "conversation_topic": title,
+        "messages": len(msgs),
+        "attachments": [],
     }
     old = index.get(mid)
     meta["exported_at"] = (old or {}).get("exported_at") or now_iso()
@@ -76,6 +96,7 @@ def write_chat_day(ws: Workspace, index, chat_key: str, title: str, chat_type: s
 
 
 # ---------------------------------------------------------------- Graph route
+
 
 def _token(ws: Workspace) -> str:
     try:
@@ -89,8 +110,9 @@ def _token(ws: Workspace) -> str:
     cache_p = ws.path(t["token_cache"])
     if cache_p.exists():
         cache.deserialize(cache_p.read_text(encoding="utf-8"))
-    app = msal.PublicClientApplication(t["client_id"], authority=f"https://login.microsoftonline.com/{t['tenant']}",
-                                       token_cache=cache)
+    app = msal.PublicClientApplication(
+        t["client_id"], authority=f"https://login.microsoftonline.com/{t['tenant']}", token_cache=cache
+    )
     accounts = app.get_accounts()
     result = app.acquire_token_silent(SCOPES, account=accounts[0]) if accounts else None
     if not result:
@@ -123,6 +145,7 @@ def _get_all(session, url: str, params: dict | None = None, max_pages: int = 200
 
 def export_graph(ws: Workspace, days: int | None = None, log=print) -> dict:
     import requests  # type: ignore
+
     token = _token(ws)
     s = requests.Session()
     s.headers["Authorization"] = f"Bearer {token}"
@@ -138,17 +161,25 @@ def export_graph(ws: Workspace, days: int | None = None, log=print) -> dict:
         since = default_since if days or not cstate.get("watermark") else parse_dt(cstate["watermark"])
         if last_upd and last_upd <= since:
             continue
-        members = [{"name": m.get("displayName", ""), "email": (m.get("email") or "").lower(), "uid": m.get("userId", "")}
-                   for m in chat.get("members") or []]
+        members = [
+            {"name": m.get("displayName", ""), "email": (m.get("email") or "").lower(), "uid": m.get("userId", "")}
+            for m in chat.get("members") or []
+        ]
         by_uid = {m["uid"]: m for m in members if m["uid"]}
-        title = chat.get("topic") or "Chat with " + ", ".join(m["name"] for m in members[:5] if m["email"] not in ws.me_emails)
+        title = chat.get("topic") or "Chat with " + ", ".join(
+            m["name"] for m in members[:5] if m["email"] not in ws.me_emails
+        )
         days_map: dict[str, list[dict]] = {}
         newest = since
-        params = {"$top": "50", "$orderby": "lastModifiedDateTime desc", "$filter": f"lastModifiedDateTime gt {utc_iso(since)}"}
+        params = {
+            "$top": "50",
+            "$orderby": "lastModifiedDateTime desc",
+            "$filter": f"lastModifiedDateTime gt {utc_iso(since)}",
+        }
         for m in _get_all(s, f"{GRAPH}/chats/{cid}/messages", params):
             if m.get("messageType") != "message" or m.get("deletedDateTime"):
                 continue
-            user = ((m.get("from") or {}).get("user") or {})
+            user = (m.get("from") or {}).get("user") or {}
             who = by_uid.get(user.get("id"), {"name": user.get("displayName", "?"), "email": ""})
             text = html_to_text((m.get("body") or {}).get("content", ""))
             for a in m.get("attachments") or []:
@@ -156,13 +187,28 @@ def export_graph(ws: Workspace, days: int | None = None, log=print) -> dict:
                     text += f"\n[file: {a['name']}]({a.get('contentUrl', '')})"
             created = parse_dt(m["createdDateTime"]).astimezone()
             days_map.setdefault(created.strftime("%Y-%m-%d"), []).append(
-                {"id": m["id"], "time": created.isoformat(), "from": {"name": who["name"], "email": who["email"]}, "text": text})
+                {
+                    "id": m["id"],
+                    "time": created.isoformat(),
+                    "from": {"name": who["name"], "email": who["email"]},
+                    "text": text,
+                }
+            )
             mod = parse_dt(m.get("lastModifiedDateTime") or m["createdDateTime"])
             newest = max(newest, mod)
             n_msgs += 1
         for day, msgs in days_map.items():
-            write_chat_day(ws, index, cid, title, chat.get("chatType", "chat"),
-                           [{"name": m["name"], "email": m["email"]} for m in members], day, msgs, "graph")
+            write_chat_day(
+                ws,
+                index,
+                cid,
+                title,
+                chat.get("chatType", "chat"),
+                [{"name": m["name"], "email": m["email"]} for m in members],
+                day,
+                msgs,
+                "graph",
+            )
             n_records += 1
         state["chats"][cid] = {"watermark": newest.isoformat(), "title": title, "last_run": now_iso()}
     index.save()
@@ -179,6 +225,7 @@ TEAMS_FOLDER_NAMES = {"teamsmessagesdata", "team chat", "teamchat"}
 
 def _find_teams_folder(ns, log=print):
     from kbmail.outlook import _safe
+
     root = ns.GetDefaultFolder(6).Parent
     stack = [(root, 0)]
     while stack:
@@ -194,6 +241,7 @@ def _find_teams_folder(ns, log=print):
 
 def probe_outlook(ws: Workspace, log=print) -> bool:
     from kbmail.outlook import _safe, connect
+
     ns = connect()
     f = _find_teams_folder(ns)
     if f is None:
@@ -206,6 +254,7 @@ def probe_outlook(ws: Workspace, log=print) -> bool:
 
 def export_outlook(ws: Workspace, days: int | None = None, log=print) -> dict:
     from kbmail.outlook import _safe, com_dt, connect, recipients_of, sender_of
+
     ns = connect()
     f = _find_teams_folder(ns)
     if f is None:
@@ -228,10 +277,18 @@ def export_outlook(ws: Workspace, days: int | None = None, log=print) -> dict:
         topic = _safe(lambda: it.ConversationTopic, "") or _safe(lambda: it.Subject, "") or "Teams chat"
         rcp = recipients_of(it)
         sender = sender_of(it)
-        g = groups.setdefault((conv, rt.strftime("%Y-%m-%d") if rt else "unknown"),
-                              {"title": topic, "members": [sender, *rcp["to"]], "msgs": []})
-        g["msgs"].append({"id": _safe(lambda: it.EntryID, ""), "time": (rt or datetime.now().astimezone()).isoformat(),
-                          "from": sender, "text": html_to_text(_safe(lambda: it.HTMLBody, "") or _safe(lambda: it.Body, ""))})
+        g = groups.setdefault(
+            (conv, rt.strftime("%Y-%m-%d") if rt else "unknown"),
+            {"title": topic, "members": [sender, *rcp["to"]], "msgs": []},
+        )
+        g["msgs"].append(
+            {
+                "id": _safe(lambda: it.EntryID, ""),
+                "time": (rt or datetime.now().astimezone()).isoformat(),
+                "from": sender,
+                "text": html_to_text(_safe(lambda: it.HTMLBody, "") or _safe(lambda: it.Body, "")),
+            }
+        )
         if rt and rt > newest:
             newest = rt
         it = items.GetNext()

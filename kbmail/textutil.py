@@ -48,6 +48,7 @@ def utc_iso(dt: datetime) -> str:
 
 # ---------------------------------------------------------------- front matter
 
+
 def dump_frontmatter(meta: dict, body: str) -> str:
     head = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True, width=1000).strip()
     return f"---\n{head}\n---\n\n{body.rstrip()}\n"
@@ -63,10 +64,11 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
         meta = {}
     if not isinstance(meta, dict):
         meta = {}
-    return meta, text[m.end():]
+    return meta, text[m.end() :]
 
 
 # ---------------------------------------------------------------- names
+
 
 def slugify(text: str, maxlen: int = 60) -> str:
     """Filesystem-safe slug. Keeps CJK and other letters, collapses the rest to '-'."""
@@ -110,7 +112,7 @@ def strip_quoted(body: str) -> str:
     for m in _QUOTE_RE.finditer(body):
         line = m.group(0)
         if re.match(r"^[\s>*_]*(from|差出人|送信者)\s*[:：]", line, re.I):
-            window = body[m.end(): m.end() + 400]
+            window = body[m.end() : m.end() + 400]
             if not _HEADER_FOLLOW_RE.search(window):
                 continue
         if m.start() == 0:
@@ -132,11 +134,13 @@ def compact(text: str, limit: int) -> str:
 
 # ---------------------------------------------------------------- tokenizing / BM25
 
-_CJK = r"぀-ヿ㐀-䶿一-鿿가-힯ｦ-ﾟ"
+_CJK = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff66-\uff9f"  # kana, CJK, hangul, half-width kana
 _TOKEN_RE = re.compile(rf"[a-z0-9][a-z0-9_.\-]*[a-z0-9]|[a-z0-9]|[{_CJK}]+", re.I)
-STOPWORDS = set(
-    "a an the and or of to in on for with at by from is are was were be been this that it as re fw fwd "
-    "please thanks thank you we i our your have has will can could would should not no yes if".split()
+STOPWORDS = frozenset(
+    (
+        "a an the and or of to in on for with at by from is are was were be been this that it as re fw fwd "
+        "please thanks thank you we i our your have has will can could would should not no yes if"
+    ).split()
 )
 
 
@@ -149,7 +153,7 @@ def tokenize(text: str) -> list[str]:
             if len(tok) == 1:
                 out.append(tok)
             else:
-                out.extend(tok[i: i + 2] for i in range(len(tok) - 1))
+                out.extend(tok[i : i + 2] for i in range(len(tok) - 1))
         elif tok not in STOPWORDS and len(tok) > 1:
             out.append(tok)
     return out

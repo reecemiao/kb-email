@@ -27,11 +27,23 @@ def collect(ws: Workspace) -> dict:
     wq = wiki.status(ws)
     runs = {k: v.get("last_run") for k, v in ws.load_json("state/runs.json", {}).items() if not k.startswith("_")}
     s = {
-        "messages": len(index), "calendar_events": len(calendar_index(ws)), "labels": lab, "unlabeled": unlabeled,
-        "label_batches_open": len(open_label_batches), "label_results_ready": label_results,
-        "rules_due": rules_due, "rules_why": rules_why, "kb": kbs, "kb_select_open": len(sel_batches),
-        "kb_select_results_ready": sel_results, "unformatted_threads": unformatted, "images": img,
-        "images_pending": img_pending, "questions": q, "wiki": wq, "last_runs": runs,
+        "messages": len(index),
+        "calendar_events": len(calendar_index(ws)),
+        "labels": lab,
+        "unlabeled": unlabeled,
+        "label_batches_open": len(open_label_batches),
+        "label_results_ready": label_results,
+        "rules_due": rules_due,
+        "rules_why": rules_why,
+        "kb": kbs,
+        "kb_select_open": len(sel_batches),
+        "kb_select_results_ready": sel_results,
+        "unformatted_threads": unformatted,
+        "images": img,
+        "images_pending": img_pending,
+        "questions": q,
+        "wiki": wq,
+        "last_runs": runs,
     }
     s["next"] = next_actions(ws, s)
     return s
@@ -45,13 +57,17 @@ def next_actions(ws: Workspace, s: dict) -> list[str]:
         out.append("Export mail: `kbmail export --days 30` (Windows/Outlook) or `kbmail import-eml <folder>`.")
         return out
     if s["label_results_ready"]:
-        out.append(f"Import Copilot labels: `kbmail label import` ({len(s['label_results_ready'])} result file(s) ready).")
+        out.append(
+            f"Import Copilot labels: `kbmail label import` ({len(s['label_results_ready'])} result file(s) ready)."
+        )
     elif s["label_batches_open"]:
         out.append(f"Copilot: run `/kb-label` ({s['label_batches_open']} batch(es) in work/labeling/).")
     elif s["unlabeled"]:
         out.append(f"{s['unlabeled']} unlabeled message(s): `kbmail label apply-rules` then `kbmail label prepare`.")
     if s["labels"].get("proposed"):
-        out.append(f"Review {s['labels']['proposed']} proposed label(s): `kbmail review` (or `kbmail review export-csv`).")
+        out.append(
+            f"Review {s['labels']['proposed']} proposed label(s): `kbmail review` (or `kbmail review export-csv`)."
+        )
     if s["rules_due"]:
         out.append(f"Refresh rules ({s['rules_why']}): `kbmail rules prepare`, then Copilot `/kb-rules`.")
     if s["kb_select_results_ready"]:
@@ -59,18 +75,29 @@ def next_actions(ws: Workspace, s: dict) -> list[str]:
     elif s["kb_select_open"]:
         out.append(f"Copilot: run `/kb-select` ({s['kb_select_open']} batch(es) in work/kb_select/).")
     if s["images_pending"]:
-        who = "Copilot `/kb-images`" if ws.cfg("copilot.vision") else "you: review/images/REVIEW.md + `kbmail images import`"
+        who = (
+            "Copilot `/kb-images`"
+            if ws.cfg("copilot.vision")
+            else "you: review/images/REVIEW.md + `kbmail images import`"
+        )
         out.append(f"{s['images_pending']} image(s) need descriptions ({who}). SVGs: `/kb-svg`.")
     if s["questions"].get("open"):
-        out.append(f"{s['questions']['open']} open question(s) in review/questions.yaml: answer, then `kbmail questions ingest`.")
+        out.append(
+            f"{s['questions']['open']} open question(s) in review/questions.yaml: "
+            "answer, then `kbmail questions ingest`."
+        )
     if s["questions"].get("answered"):
         out.append("Ingest answered questions: `kbmail questions ingest`.")
     if s["unformatted_threads"]:
-        out.append(f"Copilot: run `/kb-format` ({s['unformatted_threads']} converted thread(s); see work/convert/QUEUE.md).")
+        out.append(
+            f"Copilot: run `/kb-format` ({s['unformatted_threads']} converted thread(s); see work/convert/QUEUE.md)."
+        )
     w = s["wiki"]
     if w["queue_new"] or w["queue_changed"] or w["queue_deleted"]:
-        out.append(f"Copilot: run `/kb-wiki-ingest` ({w['queue_new']} new, {w['queue_changed']} changed, "
-                   f"{w['queue_deleted']} deleted raw file(s)).")
+        out.append(
+            f"Copilot: run `/kb-wiki-ingest` ({w['queue_new']} new, {w['queue_changed']} changed, "
+            f"{w['queue_deleted']} deleted raw file(s))."
+        )
     if not out:
         out.append("All caught up. Try `/kb-suggest` for emails to send, or `/kb-draft <topic or message id>`.")
     return out

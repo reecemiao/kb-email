@@ -24,9 +24,27 @@ CAL_INDEX = "state/calendar_index.jsonl"
 
 # Metadata keys copied into the index (everything except bulky lists stays in the .md).
 _INDEX_KEYS = (
-    "id", "source", "kind", "folder", "direction", "date", "subject", "from", "to", "cc",
-    "conversation_id", "conversation_topic", "thread_id", "attachments", "path", "exported_at",
-    "updated_at", "entry_id", "store_id", "importance", "categories",
+    "id",
+    "source",
+    "kind",
+    "folder",
+    "direction",
+    "date",
+    "subject",
+    "from",
+    "to",
+    "cc",
+    "conversation_id",
+    "conversation_topic",
+    "thread_id",
+    "attachments",
+    "path",
+    "exported_at",
+    "updated_at",
+    "entry_id",
+    "store_id",
+    "importance",
+    "categories",
 )
 
 

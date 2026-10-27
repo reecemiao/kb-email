@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from kbmail import outlook
 from kbmail.records import calendar_index, message_index, read_message
 
-quiet = lambda *a, **k: None  # noqa: E731
+quiet = lambda *a, **k: None
 
 
 class Coll:
@@ -69,7 +69,8 @@ class Att:
         self.PropertyAccessor = PA({outlook.PR_ATTACH_CONTENT_ID: cid} if cid else {})
 
     def SaveAsFile(self, path):
-        open(path, "wb").write(self._data)
+        with open(path, "wb") as f:
+            f.write(self._data)
 
 
 class Mail:
@@ -90,7 +91,10 @@ class Mail:
 class Appt:
     def __init__(self, subject, start, attendees):
         self.Subject, self.Start, self.End = subject, start, start + timedelta(hours=1)
-        self.Location, self.Body = "Room 1", "Agenda\n" + "_" * 30 + "\nJoin the meeting now\nteams.microsoft.com/x\n" + "_" * 30
+        self.Location, self.Body = (
+            "Room 1",
+            "Agenda\n" + "_" * 30 + "\nJoin the meeting now\nteams.microsoft.com/x\n" + "_" * 30,
+        )
         self.Recipients = Coll([Recip(n, e) for n, e in attendees])
         self.GlobalAppointmentID, self.EntryID = "G-" + subject, "E-" + subject
         self.IsRecurring, self.ResponseStatus, self.Categories = False, 3, ""
@@ -123,18 +127,61 @@ def _fake_ns():
     now = _now()
     html = '<p>Plan</p><img src="cid:logo1"><table><tr><td>a</td></tr></table>'
     inbox_items = [
-        Mail("Plan", now - timedelta(days=1), ("Sarah", "sarah@contoso.com"), [("Taro", "taro@contoso.com")],
-             "Plan body", "<a@x>", html, [Att("logo.png", b"x" * 9000, "logo1"), Att("spec.txt", b"spec")]),
-        Mail("Old", now - timedelta(days=40), ("Bob", "bob@contoso.com"), [("Taro", "taro@contoso.com")], "old", "<b@x>"),
+        Mail(
+            "Plan",
+            now - timedelta(days=1),
+            ("Sarah", "sarah@contoso.com"),
+            [("Taro", "taro@contoso.com")],
+            "Plan body",
+            "<a@x>",
+            html,
+            [Att("logo.png", b"x" * 9000, "logo1"), Att("spec.txt", b"spec")],
+        ),
+        Mail(
+            "Old", now - timedelta(days=40), ("Bob", "bob@contoso.com"), [("Taro", "taro@contoso.com")], "old", "<b@x>"
+        ),
     ]
-    sub = Folder("Inbox\\Sub", Items([Mail("In sub", now - timedelta(hours=5), ("Ken", "ken@x.com"),
-                                           [("Taro", "taro@contoso.com")], "sub", "<s@x>")]))
+    sub = Folder(
+        "Inbox\\Sub",
+        Items(
+            [
+                Mail(
+                    "In sub",
+                    now - timedelta(hours=5),
+                    ("Ken", "ken@x.com"),
+                    [("Taro", "taro@contoso.com")],
+                    "sub",
+                    "<s@x>",
+                )
+            ]
+        ),
+    )
     inbox = Folder("Inbox", Items(inbox_items), [sub])
-    sent = Folder("Sent Items", Items([Mail("RE: Plan", now - timedelta(hours=10), ("Taro", "taro@contoso.com"),
-                                            [("Sarah", "sarah@contoso.com")], "ok", "<c@x>")]))
-    cal = Folder("Calendar", Items([Appt("Old sync", now - timedelta(days=60), []),
-                                    Appt("Weekly", now + timedelta(days=1), [("Sarah", "sarah@contoso.com")]),
-                                    Appt("Far future", now + timedelta(days=90), [])]))
+    sent = Folder(
+        "Sent Items",
+        Items(
+            [
+                Mail(
+                    "RE: Plan",
+                    now - timedelta(hours=10),
+                    ("Taro", "taro@contoso.com"),
+                    [("Sarah", "sarah@contoso.com")],
+                    "ok",
+                    "<c@x>",
+                )
+            ]
+        ),
+    )
+    cal = Folder(
+        "Calendar",
+        Items(
+            [
+                Appt("Old sync", now - timedelta(days=60), []),
+                Appt("Weekly", now + timedelta(days=1), [("Sarah", "sarah@contoso.com")]),
+                Appt("Far future", now + timedelta(days=90), []),
+            ]
+        ),
+    )
     return NS(inbox, sent, cal)
 
 
@@ -156,8 +203,9 @@ def test_export_mail_delta_and_calendar(ws, monkeypatch):
 
     # delta: second run without --days exports nothing new, and new mail is picked up
     assert outlook.export_mail(ws, log=quiet)["exported"] == 0
-    ns.f[6].Items._items.append(Mail("New", _now(), ("Sarah", "sarah@contoso.com"),
-                                     [("Taro", "taro@contoso.com")], "new", "<n@x>"))
+    ns.f[6].Items._items.append(
+        Mail("New", _now(), ("Sarah", "sarah@contoso.com"), [("Taro", "taro@contoso.com")], "new", "<n@x>")
+    )
     assert outlook.export_mail(ws, log=quiet)["exported"] == 1
     # subfolders on request
     assert outlook.export_mail(ws, days=30, include_subfolders=True, log=quiet)["exported"] == 1
@@ -172,6 +220,7 @@ def test_export_mail_delta_and_calendar(ws, monkeypatch):
 
 def test_com_dt_reinterprets_wall_clock():
     from datetime import timezone
+
     v = datetime(2026, 10, 1, 9, 30, tzinfo=timezone.utc)  # what pywin32 hands back for 09:30 local
     out = outlook.com_dt(v)
     assert (out.hour, out.minute) == (9, 30) and out.tzinfo is not None

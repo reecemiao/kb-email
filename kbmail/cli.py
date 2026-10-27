@@ -16,15 +16,22 @@ def _ws(args) -> Workspace:
 
 # ---------------------------------------------------------------- handlers
 
+
 def cmd_init(args):
     written = init_workspace(Path(args.path), upgrade=args.upgrade)
-    print(f"{'Upgraded' if args.upgrade else 'Initialized'} workspace {Path(args.path).resolve()} ({len(written)} file(s) written).")
+    print(
+        f"{'Upgraded' if args.upgrade else 'Initialized'} workspace {Path(args.path).resolve()} "
+        f"({len(written)} file(s) written)."
+    )
     if not args.upgrade:
-        print("Next: edit kbmail.yaml (me.emails, areas), open the folder in VS Code, and run `kbmail export --days 30`.")
+        print(
+            "Next: edit kbmail.yaml (me.emails, areas), open the folder in VS Code, and run `kbmail export --days 30`."
+        )
 
 
 def cmd_status(args):
     from kbmail.status import collect, print_status
+
     ws = _ws(args)
     if args.json:
         print(json.dumps(collect(ws), ensure_ascii=False, indent=1, default=str))
@@ -34,16 +41,24 @@ def cmd_status(args):
 
 def cmd_export(args):
     from kbmail import outlook
+
     ws = _ws(args)
     if not args.calendar_only:
-        outlook.export_mail(ws, days=args.days, include_subfolders=args.include_subfolders,
-                            all_folders=args.all_folders, folders=args.folder or None, force=args.force)
+        outlook.export_mail(
+            ws,
+            days=args.days,
+            include_subfolders=args.include_subfolders,
+            all_folders=args.all_folders,
+            folders=args.folder or None,
+            force=args.force,
+        )
     if args.calendar_only or (ws.cfg("outlook.calendar") and not args.no_calendar):
         outlook.export_calendar(ws, days=args.days)
 
 
 def cmd_import_eml(args):
     from kbmail.importers import import_eml
+
     import_eml(_ws(args), args.paths, force=args.force)
 
 
@@ -52,10 +67,12 @@ def cmd_sync(args):
     from kbmail import assist, kb, people, rules, wiki
     from kbmail.labels import prepare_batches
     from kbmail.status import print_status
+
     ws = _ws(args)
     if not args.skip_export:
         try:
             from kbmail import outlook
+
             outlook.export_mail(ws)
             if ws.cfg("outlook.calendar"):
                 outlook.export_calendar(ws)
@@ -63,6 +80,7 @@ def cmd_sync(args):
             print(f"(export skipped: {e})")
         if args.teams:
             from kbmail import teams
+
             try:
                 teams.export_graph(ws)
             except Exception as e:
@@ -82,17 +100,20 @@ def cmd_sync(args):
 
 def cmd_show(args):
     from kbmail.assist import show
+
     print(show(_ws(args), args.id, thread=args.thread, full=args.full))
 
 
 def cmd_mail(args):
     from kbmail.assist import mail_search
+
     for r in mail_search(_ws(args), " ".join(args.query), args.limit, args.area):
         print(f"{r['id']}  {r['date']}  {r['score']:>6}  {r['from'][:30]:30}  {r['subject']}  (thread {r['thread']})")
 
 
 def cmd_label(args):
     from kbmail import labels, rules
+
     ws = _ws(args)
     if args.action == "prepare":
         labels.prepare_batches(ws, args.batch_size, args.limit)
@@ -106,6 +127,7 @@ def cmd_label(args):
 
 def cmd_review(args):
     from kbmail import labels
+
     ws = _ws(args)
     if args.action == "export-csv":
         labels.export_csv(ws, args.source)
@@ -117,6 +139,7 @@ def cmd_review(args):
 
 def cmd_rules(args):
     from kbmail import rules
+
     ws = _ws(args)
     if args.action == "prepare":
         rules.prepare_context(ws)
@@ -134,22 +157,30 @@ def cmd_rules(args):
 
 def cmd_kb(args):
     from kbmail import kb
+
     ws = _ws(args)
-    {"prepare": lambda: kb.prepare_select(ws, args.batch_threads), "import": lambda: kb.import_select(ws),
-     "convert": lambda: kb.convert(ws, force=args.force), "queue": lambda: kb.write_queue(ws),
-     "status": lambda: print(kb.status(ws))}[args.action]()
+    {
+        "prepare": lambda: kb.prepare_select(ws, args.batch_threads),
+        "import": lambda: kb.import_select(ws),
+        "convert": lambda: kb.convert(ws, force=args.force),
+        "queue": lambda: kb.write_queue(ws),
+        "status": lambda: print(kb.status(ws)),
+    }[args.action]()
 
 
 def cmd_images(args):
     from kbmail import images
+
     ws = _ws(args)
     if args.action == "import":
         images.import_descriptions(ws)
         from kbmail.kb import write_queue
+
         write_queue(ws)
     elif args.action == "describe":
         images.interactive_describe(ws)
         from kbmail.kb import write_queue
+
         write_queue(ws)
     elif args.action == "review":
         print(images.write_review_files(ws, images.load(ws)))
@@ -159,6 +190,7 @@ def cmd_images(args):
 
 def cmd_questions(args):
     from kbmail import questions
+
     ws = _ws(args)
     if args.action == "add":
         print(questions.add_question(ws, " ".join(args.text), context=args.context or "", step=args.step))
@@ -174,11 +206,13 @@ def cmd_questions(args):
 
 def cmd_raw(args):
     from kbmail import wiki
+
     wiki.raw_import(_ws(args))
 
 
 def cmd_wiki(args):
     from kbmail import wiki
+
     ws = _ws(args)
     if args.action == "queue":
         wiki.write_queue(ws)
@@ -202,26 +236,31 @@ def cmd_wiki(args):
 
 def cmd_people(args):
     from kbmail import people
+
     people.build(_ws(args))
 
 
 def cmd_triage(args):
     from kbmail import assist
+
     assist.triage(_ws(args), args.days)
 
 
 def cmd_style(args):
     from kbmail import assist
+
     assist.style_samples(_ws(args), args.n)
 
 
 def cmd_draft_outlook(args):
     from kbmail import outlook
+
     outlook.create_outlook_draft(_ws(args), args.path)
 
 
 def cmd_teams(args):
     from kbmail import teams
+
     ws = _ws(args)
     if args.action == "probe-outlook":
         teams.probe_outlook(ws)
@@ -232,6 +271,7 @@ def cmd_teams(args):
 
 
 # ---------------------------------------------------------------- parser
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="kbmail", description=__doc__)
@@ -250,13 +290,25 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("export", help="export Outlook mail + calendar (Windows, pywin32); delta by default")
     s.add_argument("--days", type=int, help="look back N days (default: since last export, or outlook.days)")
     g = s.add_mutually_exclusive_group()
-    g.add_argument("--include-subfolders", dest="include_subfolders", action="store_true", default=None,
-                   help="also export subfolders (default: skip them)")
+    g.add_argument(
+        "--include-subfolders",
+        dest="include_subfolders",
+        action="store_true",
+        default=None,
+        help="also export subfolders (default: skip them)",
+    )
     g.add_argument("--skip-subfolders", dest="include_subfolders", action="store_false")
-    s.add_argument("--all-folders", action="store_true",
-                   help="all mail folders of the default store (default: Inbox + Sent Items only)")
-    s.add_argument("--folder", action="append", help="folder to export instead of the configured ones "
-                                                     "(inbox, sent, or a path like 'Inbox/Projects'); repeatable")
+    s.add_argument(
+        "--all-folders",
+        action="store_true",
+        help="all mail folders of the default store (default: Inbox + Sent Items only)",
+    )
+    s.add_argument(
+        "--folder",
+        action="append",
+        help="folder to export instead of the configured ones "
+        "(inbox, sent, or a path like 'Inbox/Projects'); repeatable",
+    )
     s.add_argument("--no-calendar", action="store_true")
     s.add_argument("--calendar-only", action="store_true")
     s.add_argument("--force", action="store_true", help="re-export messages that are already in the index")
@@ -292,8 +344,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("review", help="confirm labels interactively (default) or via CSV")
     s.add_argument("action", nargs="?", default="interactive", choices=["interactive", "export-csv", "import-csv"])
-    s.add_argument("--source", default="proposed", choices=["proposed", "auto", "all"],
-                   help="proposed = Copilot suggestions, auto = rule labels (spot-check)")
+    s.add_argument(
+        "--source",
+        default="proposed",
+        choices=["proposed", "auto", "all"],
+        help="proposed = Copilot suggestions, auto = rule labels (spot-check)",
+    )
     s.add_argument("--area")
     s.add_argument("--order", default="confidence", choices=["confidence", "date"])
     s.add_argument("--accept-above", type=float, help="bulk-confirm proposals with confidence >= X first")

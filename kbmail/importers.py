@@ -33,6 +33,7 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
             dt = parsedate_to_datetime(msg.get("Date")).astimezone()
         except Exception:
             from datetime import datetime
+
             dt = datetime.fromtimestamp(f.stat().st_mtime).astimezone()
         sender = (_people([msg.get("From", "")]) or [{"name": "", "email": ""}])[0]
         direction = "sent" if sender["email"] in ws.me_emails else "received"
@@ -67,8 +68,14 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
                 body = re.sub(r"<[^>]+>", " ", body)
         atts = []
         # walk() rather than iter_attachments(): inline images live inside multipart/related.
-        parts = [pt for pt in msg.walk() if not pt.is_multipart() and pt is not body_part and pt is not html_part
-                 and (pt.get_filename() or pt.get("Content-ID"))]
+        parts = [
+            pt
+            for pt in msg.walk()
+            if not pt.is_multipart()
+            and pt is not body_part
+            and pt is not html_part
+            and (pt.get_filename() or pt.get("Content-ID"))
+        ]
         for i, part in enumerate(parts, 1):
             name = part.get_filename() or f"inline{i}.{part.get_content_subtype()}"
             data = part.get_payload(decode=True) or b""
@@ -77,7 +84,12 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
             dst = files_dir / f"{i:02d}_{safe}"
             dst.write_bytes(data)
             cid = (part.get("Content-ID") or "").strip("<> ")
-            rec = {"name": name, "bytes": len(data), "file": ws.rel(dst), "inline": bool(cid) and f"cid:{cid}" in html_text}
+            rec = {
+                "name": name,
+                "bytes": len(data),
+                "file": ws.rel(dst),
+                "inline": bool(cid) and f"cid:{cid}" in html_text,
+            }
             if cid:
                 rec["content_id"] = cid
             atts.append(rec)

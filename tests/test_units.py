@@ -1,7 +1,7 @@
 from kbmail import rules
+from kbmail.records import message_index
 from kbmail.redact import redact
 from kbmail.teams import html_to_text, write_chat_day
-from kbmail.records import message_index
 from kbmail.textutil import normalize_subject, strip_quoted, tokenize
 from kbmail.workspace import init_workspace
 
@@ -34,13 +34,28 @@ def test_redact():
 
 
 def test_rule_matching_fields():
-    rec = {"from": {"name": "Ken", "email": "ken@mail.vendor.com"}, "to": [], "cc": [], "subject": "PRJ-123 status",
-           "folder": "Inbox", "direction": "received"}
-    data = {"threshold": 2, "rules": [
-        {"id": "a", "area": "x", "weight": 1, "when": {"from_domain": ["vendor.com"]}},
-        {"id": "b", "area": "x", "weight": 1, "when": {"subject": [r"re:\bPRJ-\d+"]}},
-        {"id": "c", "area": "x", "weight": 5, "when": {"subject": ["status"]}, "unless": {"from_domain": ["vendor.com"]}},
-    ]}
+    rec = {
+        "from": {"name": "Ken", "email": "ken@mail.vendor.com"},
+        "to": [],
+        "cc": [],
+        "subject": "PRJ-123 status",
+        "folder": "Inbox",
+        "direction": "received",
+    }
+    data = {
+        "threshold": 2,
+        "rules": [
+            {"id": "a", "area": "x", "weight": 1, "when": {"from_domain": ["vendor.com"]}},
+            {"id": "b", "area": "x", "weight": 1, "when": {"subject": [r"re:\bPRJ-\d+"]}},
+            {
+                "id": "c",
+                "area": "x",
+                "weight": 5,
+                "when": {"subject": ["status"]},
+                "unless": {"from_domain": ["vendor.com"]},
+            },
+        ],
+    }
     areas, scores, hits = rules.classify(data, rules.features(rec))
     assert areas == ["x"] and scores["x"] == 2 and hits["x"] == ["a", "b"]
 
@@ -49,6 +64,7 @@ def test_teams_chat_day_merge(tmp_path):
     ws_root = tmp_path / "w"
     init_workspace(ws_root)
     from kbmail.workspace import Workspace
+
     ws = Workspace(ws_root)
     idx = message_index(ws)
     members = [{"name": "A", "email": "a@x.com"}, {"name": "B", "email": "b@x.com"}]

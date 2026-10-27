@@ -26,14 +26,28 @@ import re
 import shutil
 from collections import Counter, defaultdict
 from datetime import datetime
+from itertools import chain
 
 from kbmail.records import message_index, participants, read_message
 from kbmail.textutil import compact, email_domain, now_iso, parse_dt, strip_quoted, tokenize
 from kbmail.workspace import OTHERS, Workspace
 
 RULES_FILE = "config/rules.yaml"
-FIELDS = {"from", "from_domain", "to", "cc", "participants", "participant_domain", "subject", "body",
-          "folder", "direction", "categories", "attachment", "source"}
+FIELDS = {
+    "from",
+    "from_domain",
+    "to",
+    "cc",
+    "participants",
+    "participant_domain",
+    "subject",
+    "body",
+    "folder",
+    "direction",
+    "categories",
+    "attachment",
+    "source",
+}
 DOMAIN_FIELDS = {"from_domain", "participant_domain"}
 
 
@@ -75,6 +89,7 @@ def validate_rules(ws: Workspace, data: dict) -> list[str]:
 
 
 # ---------------------------------------------------------------- features & matching
+
 
 def features(rec: dict, body: str = "") -> dict[str, list[str]]:
     frm = rec.get("from") or {}
@@ -152,9 +167,11 @@ def _body_for_rules(ws: Workspace, rec: dict) -> str:
 
 # ---------------------------------------------------------------- apply / evaluate
 
+
 def apply_rules(ws: Workspace, relabel_auto: bool = True, log=print) -> dict:
     """Label unlabeled messages (and refresh rule-made labels) with config/rules.yaml."""
     from kbmail.labels import load_labels, save_labels, set_label
+
     rules = load_rules(ws)
     if not rules["rules"]:
         log("No rules yet (config/rules.yaml is empty) - nothing applied.")
@@ -165,7 +182,7 @@ def apply_rules(ws: Workspace, relabel_auto: bool = True, log=print) -> dict:
         cur = labels.get(rec["id"])
         if cur and not (relabel_auto and cur.get("status") == "auto"):
             continue
-        areas, scores, hits = classify(rules, features(rec, _body_for_rules(ws, rec)))
+        areas, _, hits = classify(rules, features(rec, _body_for_rules(ws, rec)))
         if areas is None:
             if cur and cur.get("status") == "auto":
                 del labels[rec["id"]]  # rules no longer cover it -> back to the LLM queue
@@ -173,8 +190,15 @@ def apply_rules(ws: Workspace, relabel_auto: bool = True, log=print) -> dict:
             continue
         if cur and cur.get("labels") == areas:
             continue
-        set_label(labels, rec["id"], areas, status="auto", source="rule",
-                  confidence=None, reason="rules: " + ", ".join(sum(hits.values(), [])))
+        set_label(
+            labels,
+            rec["id"],
+            areas,
+            status="auto",
+            source="rule",
+            confidence=None,
+            reason="rules: " + ", ".join(chain.from_iterable(hits.values())),
+        )
         n_changed += bool(cur)
         n_new += not cur
     save_labels(ws, labels)
@@ -185,6 +209,7 @@ def apply_rules(ws: Workspace, relabel_auto: bool = True, log=print) -> dict:
 def evaluate(ws: Workspace, rules: dict | None = None) -> dict:
     """Compare rule output with user-confirmed labels."""
     from kbmail.labels import load_labels
+
     rules = rules or load_rules(ws)
     labels = load_labels(ws)
     index = message_index(ws)
@@ -196,7 +221,7 @@ def evaluate(ws: Workspace, rules: dict | None = None) -> dict:
             continue
         rec = index.get(mid)
         truth = set(lab["labels"])
-        pred_list, scores, hits = classify(rules, features(rec, _body_for_rules(ws, rec)))
+        pred_list, _, hits = classify(rules, features(rec, _body_for_rules(ws, rec)))
         pred = set(pred_list or [])
         total += 1
         if pred:
@@ -210,9 +235,17 @@ def evaluate(ws: Workspace, rules: dict | None = None) -> dict:
             elif a in truth:
                 per[a]["fn"] += 1
         if pred and pred != truth:
-            mistakes.append({"id": mid, "truth": sorted(truth), "pred": sorted(pred), "rules": hits,
-                             "subject": rec.get("subject", ""), "from": (rec.get("from") or {}).get("email", "")})
-    for a, c in per.items():
+            mistakes.append(
+                {
+                    "id": mid,
+                    "truth": sorted(truth),
+                    "pred": sorted(pred),
+                    "rules": hits,
+                    "subject": rec.get("subject", ""),
+                    "from": (rec.get("from") or {}).get("email", ""),
+                }
+            )
+    for c in per.values():
         c["precision"] = round(c["tp"] / (c["tp"] + c["fp"]), 3) if c["tp"] + c["fp"] else None
         c["recall"] = round(c["tp"] / (c["tp"] + c["fn"]), 3) if c["tp"] + c["fn"] else None
     return {
@@ -228,6 +261,7 @@ def evaluate(ws: Workspace, rules: dict | None = None) -> dict:
 def mine_features(ws: Workspace, min_support: int = 3, min_purity: float = 0.8) -> dict[str, list[dict]]:
     """Find senders/domains/subject tokens that predict an area among confirmed labels."""
     from kbmail.labels import load_labels
+
     labels = load_labels(ws)
     index = message_index(ws)
     counts: dict[tuple[str, str], Counter] = defaultdict(Counter)
@@ -258,8 +292,10 @@ def mine_features(ws: Workspace, min_support: int = 3, min_purity: float = 0.8) 
 
 # ---------------------------------------------------------------- Copilot hand-off
 
+
 def due(ws: Workspace) -> tuple[bool, str]:
     from kbmail.labels import load_labels
+
     last = ws.last_run("rules_commit")
     confirmed = sum(1 for v in load_labels(ws).values() if v.get("status") == "confirmed")
     if not last:
@@ -273,9 +309,14 @@ def due(ws: Workspace) -> tuple[bool, str]:
 
 
 def _fmt_eval(ev: dict) -> list[str]:
-    lines = [f"- confirmed labels: {ev['confirmed']}, rules: {ev['rules']}",
-             f"- coverage (rules decide): {ev['coverage']}", f"- accuracy when rules decide: {ev['accuracy_when_covered']}",
-             "", "| area | tp | fp | fn | precision | recall |", "|---|---|---|---|---|---|"]
+    lines = [
+        f"- confirmed labels: {ev['confirmed']}, rules: {ev['rules']}",
+        f"- coverage (rules decide): {ev['coverage']}",
+        f"- accuracy when rules decide: {ev['accuracy_when_covered']}",
+        "",
+        "| area | tp | fp | fn | precision | recall |",
+        "|---|---|---|---|---|---|",
+    ]
     for a, c in ev["per_area"].items():
         lines.append(f"| {a} | {c['tp']} | {c['fp']} | {c['fn']} | {c['precision']} | {c['recall']} |")
     return lines
@@ -284,6 +325,7 @@ def _fmt_eval(ev: dict) -> list[str]:
 def prepare_context(ws: Workspace, log=print) -> str:
     """Write work/rules/RULES_CONTEXT.md: everything Copilot needs to (re)write rules.yaml."""
     from kbmail.labels import load_labels
+
     rules = load_rules(ws)
     ev = evaluate(ws, rules)
     mined = mine_features(ws)
@@ -291,16 +333,30 @@ def prepare_context(ws: Workspace, log=print) -> str:
     index = message_index(ws)
     last = ws.last_run("rules_commit")
     since = parse_dt(last["last_run"]) if last else None
-    lines = [f"# Rules context ({now_iso()})", "",
-             "Generated by `kbmail rules prepare`. Use with the `/kb-rules` prompt.", "",
-             "## Areas", ""]
+    lines = [
+        f"# Rules context ({now_iso()})",
+        "",
+        "Generated by `kbmail rules prepare`. Use with the `/kb-rules` prompt.",
+        "",
+        "## Areas",
+        "",
+    ]
     for a in ws.areas:
         lines.append(f"- **{a['name']}**: {a['description']} (keywords: {', '.join(a['keywords']) or '-'})")
     lines.append(f"- **{OTHERS}**: anything else")
-    lines += ["", "## Current rules evaluated against confirmed labels", "", *_fmt_eval(ev), "",
-              "### Mistakes (rules disagree with the user)", ""]
+    lines += [
+        "",
+        "## Current rules evaluated against confirmed labels",
+        "",
+        *_fmt_eval(ev),
+        "",
+        "### Mistakes (rules disagree with the user)",
+        "",
+    ]
     for m in ev["mistakes"][:60]:
-        lines.append(f"- `{m['id']}` truth={m['truth']} pred={m['pred']} rules={m['rules']} | {m['from']} | {m['subject']}")
+        lines.append(
+            f"- `{m['id']}` truth={m['truth']} pred={m['pred']} rules={m['rules']} | {m['from']} | {m['subject']}"
+        )
     if not ev["mistakes"]:
         lines.append("- none")
     lines += ["", "## Strong signals mined from confirmed labels (support >= 3, purity >= 0.8)", ""]
@@ -310,24 +366,40 @@ def prepare_context(ws: Workspace, log=print) -> str:
             lines.append(f"- {f['field']} = `{f['value']}` (support {f['support']}, purity {f['purity']})")
         lines.append("")
     lines += ["## Confirmed examples not covered by current rules (sample)", ""]
-    uncovered = [mid for mid, lab in labels.items() if lab.get("status") == "confirmed" and mid in index
-                 and classify(rules, features(index.get(mid), _body_for_rules(ws, index.get(mid))))[0] is None]
+    uncovered = [
+        mid
+        for mid, lab in labels.items()
+        if lab.get("status") == "confirmed"
+        and mid in index
+        and classify(rules, features(index.get(mid), _body_for_rules(ws, index.get(mid))))[0] is None
+    ]
     for mid in uncovered[:80]:
         rec = index.get(mid)
-        lines.append(f"- `{mid}` [{', '.join(labels[mid]['labels'])}] {(rec.get('from') or {}).get('email', '')} | "
-                     f"{rec.get('subject', '')}")
+        lines.append(
+            f"- `{mid}` [{', '.join(labels[mid]['labels'])}] {(rec.get('from') or {}).get('email', '')} | "
+            f"{rec.get('subject', '')}"
+        )
     if since:
-        recent = [mid for mid, lab in labels.items() if lab.get("status") == "confirmed"
-                  and parse_dt(lab.get("updated")) and parse_dt(lab["updated"]) > since]
+        recent = [
+            mid
+            for mid, lab in labels.items()
+            if lab.get("status") == "confirmed" and parse_dt(lab.get("updated")) and parse_dt(lab["updated"]) > since
+        ]
         lines += ["", f"## Labels confirmed since last rules refresh ({len(recent)})", ""]
         for mid in recent[:80]:
             rec = index.get(mid) or {}
-            lines.append(f"- `{mid}` [{', '.join(labels[mid]['labels'])}] {(rec.get('from') or {}).get('email', '')} | "
-                         f"{compact(rec.get('subject', ''), 120)}")
+            lines.append(
+                f"- `{mid}` [{', '.join(labels[mid]['labels'])}] {(rec.get('from') or {}).get('email', '')} | "
+                f"{compact(rec.get('subject', ''), 120)}"
+            )
     journal = ws.path("config/rules_journal.md")
     if journal.exists():
-        lines += ["", "## Previous conclusions (config/rules_journal.md, latest last)", "",
-                  journal.read_text(encoding="utf-8")[-6000:]]
+        lines += [
+            "",
+            "## Previous conclusions (config/rules_journal.md, latest last)",
+            "",
+            journal.read_text(encoding="utf-8")[-6000:],
+        ]
     out = ws.path("work/rules/RULES_CONTEXT.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -338,6 +410,7 @@ def prepare_context(ws: Workspace, log=print) -> str:
 def commit(ws: Workspace, note: str = "", log=print) -> bool:
     """Validate rules.yaml, snapshot it to state/rules_history and record the run."""
     from kbmail.labels import load_labels
+
     rules = load_rules(ws)
     errors = validate_rules(ws, rules)
     if errors:
@@ -350,10 +423,18 @@ def commit(ws: Workspace, note: str = "", log=print) -> bool:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     shutil.copyfile(ws.path(RULES_FILE), hist / f"rules_{stamp}.yaml")
     confirmed = sum(1 for v in load_labels(ws).values() if v.get("status") == "confirmed")
-    ws.record_run("rules_commit", confirmed=confirmed, coverage=ev["coverage"],
-                  accuracy=ev["accuracy_when_covered"], rules=ev["rules"], note=note)
-    log(f"Rules committed: {ev['rules']} rules, coverage {ev['coverage']}, accuracy {ev['accuracy_when_covered']}. "
-        f"Snapshot state/rules_history/rules_{stamp}.yaml")
+    ws.record_run(
+        "rules_commit",
+        confirmed=confirmed,
+        coverage=ev["coverage"],
+        accuracy=ev["accuracy_when_covered"],
+        rules=ev["rules"],
+        note=note,
+    )
+    log(
+        f"Rules committed: {ev['rules']} rules, coverage {ev['coverage']}, accuracy {ev['accuracy_when_covered']}. "
+        f"Snapshot state/rules_history/rules_{stamp}.yaml"
+    )
     return True
 
 

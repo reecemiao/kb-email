@@ -8,8 +8,23 @@ import zipfile
 from pathlib import Path
 
 TEXT_EXT = {".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml", ".xml"}
-CONVERTIBLE_EXT = {".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".html", ".htm", ".msg", ".eml", ".epub",
-                   ".ipynb", ".zip", ".rtf", ".doc", ".ppt"}
+CONVERTIBLE_EXT = {
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".xls",
+    ".html",
+    ".htm",
+    ".msg",
+    ".eml",
+    ".epub",
+    ".ipynb",
+    ".zip",
+    ".rtf",
+    ".doc",
+    ".ppt",
+}
 OFFICE_MEDIA = {".docx": "word/media/", ".pptx": "ppt/media/", ".xlsx": "xl/media/"}
 
 _md = None

@@ -251,7 +251,7 @@ Add dependencies with `uv add <pkg>` (or `uv add --group dev <pkg>`) so `uv.lock
 The tests run the whole pipeline on generated `.eml` files. They write the result files Copilot
 would write, then check export de-duplication, labeling import, interactive review, rule
 validation/evaluation/snapshots, KB selection with questions, markitdown conversion (HTML tables,
-docx, inline images, SVG), redaction, quote stripping, image description flow, wiki delta queue with
-diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 exporter is tested against
+docx, inline images, SVG), redaction, quoted history (forwards keep what they forward, exported
+originals become pointers), image description flow, wiki delta queue with diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 exporter is tested against
 a fake Outlook object model. Real Outlook and the Graph (Teams) calls need Windows and a tenant, so test
 those on your machine.

@@ -22,8 +22,8 @@ message_ids: [<ids>]
 
 ## Conversation
 ### 2026-10-01 Sarah Tanaka → team
-Cleaned message text (verbatim content; remove greetings, signatures, disclaimers, quoted history,
-join-meeting boilerplate). Keep tables as Markdown tables.
+Cleaned message text (verbatim content; remove greetings, signatures, disclaimers, join-meeting
+boilerplate). Keep tables as Markdown tables. A `--- quoted: ... ---` block becomes its own dated entry.
 
 ## Attachments
 ### <file name>

@@ -125,10 +125,34 @@ the Copilot queue.
 coverage, accuracy, list of mistakes). `kbmail rules prepare` adds mined signals: features with
 support ≥ 3 and purity ≥ 0.8 among confirmed labels.
 
+## Quoted history (replies and forwards)
+
+`kbmail/history.py` splits every body into its own text and the quoted messages below it: Outlook
+`From/Sent/To/Cc/Subject` blocks (English, Japanese, Chinese; also on one line, as HTML mail renders
+them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
+it checks whether that message is exported on its own. A match needs three things:
+- **sender:** the same e-mail address, or the same name in any order ("MORGAN, Alex" = "Alex MORGAN");
+- **time:** the quoted time ("2026年7月30日 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
+  message's time in some time zone (whole or half hours, a few minutes' tolerance). A copy from
+  another day never matches;
+- **text:** the exported message's own text is found in the quote (letters and digits only, so line
+  wrapping, markdown and links don't matter).
+
+`state/history.json` keeps a small fingerprint per message (rebuilt for new or changed messages only).
+Wherever mail text is shown (labeling batches, `kbmail review`, rules, `kbmail mail`, `kbmail show`,
+KB selection and conversion), a message is its own text, plus quoted messages that are not exported,
+as `--- quoted: sender | date | subject ---` blocks, plus a one-line pointer for those that are. A
+forward that says only "FYI" therefore carries what it forwards. Within a thread, the same quoted
+text is shown once. KB conversion counts a quote as "exported" only when the original is converted
+in the same thread, so nothing is lost when Copilot drops messages from a selection. If the time or
+the text doesn't fit, the quote is kept: duplicated text is cheaper than lost text. Replies also
+record who was added compared with the message they answer (`[added to the conversation here: ...]`).
+`kbmail history` reports counts and `kbmail history show <id>` explains one message.
+
 ## KB conversion
 
-For each selected thread: HTML body → Markdown (markitdown); quoted history stripped from all but the
-first message (English and Japanese reply headers); attachments converted with markitdown (docx, pptx,
+For each selected thread: HTML body → Markdown (markitdown); quoted history handled as below;
+attachments converted with markitdown (docx, pptx,
 xlsx, pdf, msg, html, ...); images inside docx/pptx/xlsx are extracted from the zip media folder;
 images and SVGs are registered and replaced by markers; secrets are redacted (`privacy.*`). Pending
 SVGs then go through `svg2mermaid`, which tries three things in order: the draw.io model when present

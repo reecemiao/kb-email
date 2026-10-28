@@ -27,10 +27,11 @@ from kbmail.convert import (
     html_to_markdown,
     office_media,
 )
+from kbmail.history import History
 from kbmail.labels import load_labels
 from kbmail.records import fmt_people, fmt_person, message_index, read_message, threads
 from kbmail.redact import redact
-from kbmail.textutil import compact, now_iso, parse_frontmatter, short_hash, slugify, strip_quoted
+from kbmail.textutil import compact, now_iso, parse_frontmatter, short_hash, slugify
 from kbmail.workspace import OTHERS, Workspace
 
 SELECTION = "state/kb_selection.json"
@@ -81,6 +82,7 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
         log("No threads need KB assessment.")
         return []
     chars = min(ws.cfg("kb.message_chars", 6000), 2500)
+    hist = History.of(ws)
     written = []
     for chunk in batched(todo, batch_threads):
         name = f"batch_{state['next']:03d}"
@@ -122,12 +124,13 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
                     f"new messages arrived since - reassess the whole thread"
                 )
             lines.append("")
-            for i, m in enumerate(msgs):
+            scope, seen = {m["id"] for m in msgs}, {}
+            for m in msgs:
                 try:
                     _, body = read_message(ws, m)
                 except FileNotFoundError:
                     body = ""
-                text = body if i == 0 else strip_quoted(body)
+                text = hist.render(m, body, scope=scope, seen=seen)
                 atts = [a["name"] for a in m.get("attachments") or [] if not a.get("inline")]
                 lines += [
                     f"### {m['id']} | {m.get('date', '')[:16]} | {fmt_person(m.get('from'))}",
@@ -221,7 +224,8 @@ def _raw_target(ws: Workspace, tid: str, msgs: list[dict], areas: list[str], tit
     return f"{base}/{area}/{date}_{slugify(title or msgs[-1].get('subject', ''), 50)}_{tid}.md"
 
 
-def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, first: bool, att_choice) -> list[str]:
+def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, quoting: dict, att_choice) -> list[str]:
+    """`quoting`: {"history", "scope", "seen"} - quoted messages are kept unless converted in this thread."""
     meta, body = read_message(ws, m)
     ctx = f"{m.get('date', '')[:10]} '{m.get('subject', '')}' from {fmt_person(m.get('from'))}"
     cid_files = {
@@ -236,10 +240,9 @@ def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, first: bool, a
         text = ANY_IMG_RE.sub("", text)  # remote images (tracking pixels, logos)
     else:
         text = body
-    if not first:
-        text = strip_quoted(text)
+    text = quoting["history"].render(m, text, scope=quoting["scope"], seen=quoting["seen"])
 
-    def _inline(mm):  # register only inline images that survive quote stripping
+    def _inline(mm):  # register only inline images that survive (own text, quoted text not exported)
         f = cid_files[mm.group(1)]
         iid = imgs.register(
             ws, reg, f.read_bytes(), f.suffix, {"thread": tid, "message": m["id"], "origin": "inline", "context": ctx}
@@ -323,8 +326,9 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
             f"- messages: {len(msgs)} ({msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]})",
             "",
         ]
-        for i, m in enumerate(msgs):
-            parts += _convert_message(ws, reg, tid, m, i == 0, s.get("attachments", "all"))
+        quoting = {"history": History.of(ws), "scope": {m["id"] for m in msgs}, "seen": {}}
+        for m in msgs:
+            parts += _convert_message(ws, reg, tid, m, quoting, s.get("attachments", "all"))
         text = "\n".join(parts)
         if ws.cfg("privacy.redact", True):
             text, n = redact(text, ws.cfg("privacy.extra_patterns", []))

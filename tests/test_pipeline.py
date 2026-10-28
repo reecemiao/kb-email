@@ -104,7 +104,8 @@ def test_full_pipeline(ws, mailbox):
     src = ws.path(kb.CONVERT_DIR, tid, "thread.md").read_text(encoding="utf-8")
     assert "hunter2secret" not in src
     assert "idempotency keys" in src and "timeout" in src
-    assert "old quoted text" not in src
+    assert src.count("is planned for") == 1  # the quoted copy in the reply became a pointer
+    assert "exported separately" in src
     assert "description pending" in src
     reg = images.load(ws)
     assert {v["type"] for v in reg.values()} == {"image", "svg"}

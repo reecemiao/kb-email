@@ -122,7 +122,8 @@ def build_mailbox(d):
         date=now - timedelta(days=4),
         refs=root_id,
         body="Sarah,\nRollback if error rate > 2% for 10 minutes.\n\nFrom: Sarah Tanaka\nSent: Monday\n"
-        "To: Taro\nSubject: Payment API cut-over plan\n\nHi Taro, old quoted text",
+        "To: Taro\nSubject: Payment API cut-over plan\n\nHi Taro,\nThe cut-over is planned for 2026-11-15. "
+        "Could you confirm\nthe rollback criteria?\npassword: hunter2secret\nThanks, Sarah",
     )
     make_eml(
         d / "03.eml",

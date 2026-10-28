@@ -36,8 +36,9 @@ any command for details.
 
 | command | what it does |
 |---|---|
-| `kbmail show <message-or-thread-id> [--thread] [--full]` | print a message or whole thread (quoted history stripped unless `--full`) |
+| `kbmail show <message-or-thread-id> [--thread] [--full]` | print a message or whole thread: own text + quoted mail that is not exported elsewhere (`--full` = raw body) |
 | `kbmail mail <query> [-n N] [--area A]` | BM25 search over exported mail |
+| `kbmail history [status]` / `kbmail history show <message-id>` | quoted mail inside replies/forwards: which quoted messages are already exported (shown as a pointer) and which are kept as text |
 
 ## Labeling and rules
 

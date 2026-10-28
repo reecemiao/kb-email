@@ -9,6 +9,10 @@ For each batch:
 1. Read the whole batch file. It lists the areas (with descriptions/keywords) and the messages.
 2. For each message decide the area(s). Judge by what the message is *about*, not by who sent it alone:
    - use the subject, the text, the participants and attachments; rule scores are only hints
+   - a `--- quoted: ... ---` block is mail the message forwards or replies to that is not exported on its
+     own: it is part of this message's content (an "FYI" forward is about what it forwards)
+   - `[quoted: ... = message <id>, exported separately, labels: ...]` points to mail labeled elsewhere;
+     its labels are a strong hint for a reply or forward
    - automated notifications, newsletters, HR/admin, social, spam → `others` unless clearly about an area
    - several labels only when the message substantially covers several areas
    - confidence: 0.9 obvious; 0.7 likely; 0.5 unsure (the user reviews the low ones first)

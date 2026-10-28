@@ -31,7 +31,7 @@ outlook:
 
 labeling:
   batch_size: 40           # messages per Copilot labeling batch
-  preview_chars: 700
+  preview_chars: 1000
   rule_threshold: 2.0      # default threshold if rules.yaml doesn't set one
 
 rules:

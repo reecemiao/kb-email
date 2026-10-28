@@ -117,6 +117,29 @@ def cmd_show(args):
     print(show(_ws(args), args.id, thread=args.thread, full=args.full))
 
 
+def cmd_history(args):
+    from kbmail import history
+
+    ws = _ws(args)
+    if args.action == "show":
+        if not args.id:
+            print("usage: kbmail history show <message-id>", file=sys.stderr)
+            return 1
+        try:
+            print(history.explain(ws, args.id))
+        except KeyError:
+            print(f"unknown message id: {args.id}", file=sys.stderr)
+            return 1
+    else:
+        st = history.status(ws)
+        print(
+            f"{st['with_history']} of {st['messages']} message(s) quote older mail: {st['quoted']} quoted message(s), "
+            f"{st['already_exported']} already exported (shown as a pointer), {st['kept']} not exported (kept).\n"
+            f"{st['messages_quoted_elsewhere']} exported message(s) also appear quoted inside later mail."
+        )
+    return 0
+
+
 def cmd_mail(args):
     from kbmail.assist import mail_search
 
@@ -495,8 +518,13 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("show", help="print a message (or its whole thread)")
     s.add_argument("id")
     s.add_argument("--thread", action="store_true")
-    s.add_argument("--full", action="store_true", help="keep quoted history")
+    s.add_argument("--full", action="store_true", help="the raw body, with all quoted history")
     s.set_defaults(func=cmd_show)
+
+    s = sub.add_parser("history", help="quoted history in replies/forwards: what is already exported, what is kept")
+    s.add_argument("action", choices=["status", "show"], nargs="?", default="status")
+    s.add_argument("id", nargs="?", help="message id (for show)")
+    s.set_defaults(func=cmd_history)
 
     s = sub.add_parser("mail", help="search exported mail (BM25)")
     s.add_argument("query", nargs="+")

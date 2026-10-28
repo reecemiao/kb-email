@@ -29,7 +29,7 @@ from datetime import datetime
 from itertools import chain
 
 from kbmail.records import message_index, participants, read_message
-from kbmail.textutil import compact, email_domain, now_iso, parse_dt, strip_quoted, tokenize
+from kbmail.textutil import compact, email_domain, now_iso, parse_dt, tokenize
 from kbmail.workspace import OTHERS, Workspace
 
 RULES_FILE = "config/rules.yaml"
@@ -162,7 +162,9 @@ def _body_for_rules(ws: Workspace, rec: dict) -> str:
         _, body = read_message(ws, rec)
     except FileNotFoundError:
         return ""
-    return strip_quoted(body)[:5000]
+    from kbmail.history import History
+
+    return History.of(ws).context(rec, body)[:5000]
 
 
 # ---------------------------------------------------------------- apply / evaluate

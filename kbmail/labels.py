@@ -19,9 +19,10 @@ import subprocess
 import sys
 from itertools import batched
 
+from kbmail.history import History
 from kbmail.records import fmt_people, fmt_person, message_index, read_message
 from kbmail.redact import redact
-from kbmail.textutil import compact, now_iso, strip_quoted
+from kbmail.textutil import compact, now_iso
 from kbmail.workspace import OTHERS, Workspace
 
 LABELS = "state/labels.json"
@@ -82,6 +83,7 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
         log("Nothing to label: every message is labeled or already in an open batch.")
         return []
     rules = load_rules(ws)
+    hist = History.of(ws)
     written = []
     for chunk in batched(pending, batch_size):
         name = f"batch_{state['next']:03d}"
@@ -115,7 +117,7 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
                 body = ""
             hint = ""
             if rules["rules"]:
-                _, scores, _ = classify(rules, features(rec, body))
+                _, scores, _ = classify(rules, features(rec, hist.context(rec, body)))
                 if scores:
                     hint = "rule scores (below threshold): " + ", ".join(f"{a}={s:g}" for a, s in scores.items())
             atts = ", ".join(a["name"] for a in rec.get("attachments") or [] if not a.get("inline"))
@@ -132,7 +134,7 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
                 lines.append(f"- attachments: {atts}")
             if hint:
                 lines.append(f"- {hint}")
-            text, _ = redact(compact(strip_quoted(body), preview))
+            text, _ = redact(compact(hist.render(rec, body, labels=labels), preview))
             lines += ["", "> " + text.replace("\n", "\n> "), ""]
         p = ws.path(WORKDIR, f"{name}.md")
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -260,6 +262,7 @@ def interactive_review(
         save_labels(ws, labels)
         out(f"Bulk-accepted {stats['confirmed']} label(s) with confidence >= {accept_above}.")
     choices = ws.labels_allowed
+    hist = History.of(ws)
     menu = "  ".join(f"[{i}] {a}" for i, a in enumerate(choices, 1))
     out(
         f"\n{len(ids)} label(s) to review. Keys: Enter=accept  1-{len(choices)} (e.g. 1,3)=set label(s)  "
@@ -282,7 +285,7 @@ def interactive_review(
         out(f"From: {fmt_person(rec.get('from'))}")
         out(f"To:   {fmt_people(rec.get('to'), 4)}")
         out(f"Subj: {rec.get('subject', '')}")
-        out(compact(strip_quoted(body), 900))
+        out(compact(hist.render(rec, body, labels=labels), 900))
         out(f"\n=> proposed: {', '.join(lab['labels'])}  (conf {conf}, {lab.get('source')}): {lab.get('reason', '')}")
         out(menu)
         ans = input_fn("> ").strip().lower()

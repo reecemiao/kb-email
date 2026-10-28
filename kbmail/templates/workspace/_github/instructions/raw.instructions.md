@@ -5,5 +5,6 @@ applyTo: "raw/**"
 ---
 Files in `raw/` are knowledge *sources*. Only the `kb-format` skill writes `raw/email/**` and `raw/teams/**`.
 Preserve facts, numbers, names, dates and decisions verbatim; remove only noise (signatures, legal
-disclaimers, repeated quoted history, meeting join boilerplate). Never edit `raw/notes/**` (the user's
+disclaimers, quoted history that repeats a message already in the file, meeting join boilerplate).
+Quoted mail that appears nowhere else (`--- quoted: ... ---` blocks in the converted thread) is content. Never edit `raw/notes/**` (the user's
 own answers) or `raw/docs/**` and `raw/web/**` (converted documents).

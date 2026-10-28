@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
+from kbmail.history import History
 from kbmail.labels import load_labels
 from kbmail.records import calendar_index, fmt_people, fmt_person, message_index, read_message, threads
 from kbmail.textutil import BM25, compact, now_iso, parse_dt, strip_quoted
@@ -30,8 +31,10 @@ def show(ws: Workspace, mid: str, thread: bool = False, full: bool = False) -> s
     else:
         msgs = threads(ws, index)[rec["thread_id"]] if thread else [rec]
     labels = load_labels(ws)
+    hist = History.of(ws)
+    scope, seen = ({m["id"] for m in msgs}, {}) if thread else (None, None)
     out = []
-    for i, m in enumerate(msgs):
+    for m in msgs:
         _, body = read_message(ws, m)
         lab = labels.get(m["id"], {})
         out += [
@@ -47,13 +50,14 @@ def show(ws: Workspace, mid: str, thread: bool = False, full: bool = False) -> s
         atts = [a["name"] for a in m.get("attachments") or [] if not a.get("inline")]
         if atts:
             out.append(f"Attachments: {', '.join(atts)}")
-        out += ["", body if full or i == 0 else strip_quoted(body), ""]
+        out += ["", body if full else hist.render(m, body, scope=scope, seen=seen, labels=labels), ""]
     return "\n".join(out)
 
 
 def mail_search(ws: Workspace, query: str, limit: int = 15, area: str | None = None) -> list[dict]:
     index = message_index(ws)
     labels = load_labels(ws)
+    hist = History.of(ws)
     docs = {}
     for r in index.all():
         if area and area not in labels.get(r["id"], {}).get("labels", []):
@@ -63,7 +67,7 @@ def mail_search(ws: Workspace, query: str, limit: int = 15, area: str | None = N
         except FileNotFoundError:
             body = ""
         docs[r["id"]] = (
-            f"{r.get('subject', '')} {r.get('subject', '')} {fmt_person(r.get('from'))} {strip_quoted(body)[:4000]}"
+            f"{r.get('subject', '')} {r.get('subject', '')} {fmt_person(r.get('from'))} {hist.context(r, body)[:4000]}"
         )
     out = []
     for mid, score in BM25(docs).search(query, limit):

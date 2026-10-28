@@ -46,6 +46,7 @@ If `-Test` fails:
 |---|---|---|
 | "Need admin approval" / `AADSTS65001` / consent required | your tenant blocks users from granting Chat.Read to that app | ask IT to grant consent for "Microsoft Graph Command Line Tools" (Chat.Read, User.Read), a one-click admin action, or use B–E |
 | `Install-Module` blocked (no PowerShell Gallery) | package source blocked | ask IT for the module, or use B–E |
+| "different language mode than the module manifest", "ConstrainedLanguage", or the script says it runs in Constrained Language Mode (exit code 5) | application control (WDAC/AppLocker) only lets IT-approved modules load | a security control: don't try to get around it. Use B (`kbmail teams probe-outlook`) or C–E, or ask IT to allow-list the Microsoft-signed `Microsoft.Graph.Authentication` module |
 | "running scripts is disabled" | execution policy | `kbmail teams export` already passes `-ExecutionPolicy Bypass` for this process. If a group policy enforces signing, use B–E |
 
 **Graph Explorer** (https://developer.microsoft.com/graph/graph-explorer) is the same idea in a
@@ -59,11 +60,14 @@ script uses Microsoft's own tool as intended.
 
 ## B. Outlook hidden folder (experimental)
 
+This needs only Python and Outlook COM (the same as the mail export), so it often works where
+PowerShell modules are blocked.
+
 Exchange keeps a compliance copy of Teams chats in a hidden mailbox folder (`TeamsMessagesData`).
 Some classic Outlook profiles expose it to COM, many don't:
 
 ```powershell
-kbmail teams probe-outlook                       # tells you whether yours does
+kbmail teams probe-outlook                       # tells you whether yours does (and your cache mode)
 kbmail teams export --via outlook --days 30      # if it does
 ```
 

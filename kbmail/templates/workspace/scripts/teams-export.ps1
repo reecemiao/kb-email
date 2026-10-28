@@ -29,6 +29,18 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# Application control (WDAC/AppLocker) puts PowerShell into Constrained Language Mode: only modules
+# your IT allows can load, and this script can't call the .NET APIs it needs. That is a security
+# control, not an error to work around: use another route instead.
+if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
+    Write-Host "PowerShell runs in $($ExecutionContext.SessionState.LanguageMode) mode on this computer (application control)."
+    Write-Host "Microsoft Graph PowerShell can't load here, so this route is not available. Instead:"
+    Write-Host "  - kbmail teams probe-outlook     (Teams chats via Outlook, if your profile exposes them)"
+    Write-Host "  - Share to Outlook / kbmail teams import-text / meeting transcripts (see docs/teams.md)"
+    Write-Host "  - or ask IT to allow-list the Microsoft-signed Microsoft.Graph.Authentication module"
+    exit 5
+}
+
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.Authentication)) {
     Write-Host "Microsoft Graph PowerShell is not installed. Install it for your user (no admin rights needed):"
     Write-Host "    Install-Module Microsoft.Graph.Authentication -Scope CurrentUser"

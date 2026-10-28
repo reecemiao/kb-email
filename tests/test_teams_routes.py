@@ -142,3 +142,54 @@ def test_graph_route_without_client_id_points_to_alternatives(ws):
 def test_workspace_ships_the_powershell_script(ws):
     script = ws.path("scripts/teams-export.ps1").read_text(encoding="utf-8")
     assert "Connect-MgGraph" in script and "Chat.Read" in script and "-OutputType Json" in script
+
+
+def test_constrained_language_mode_is_explained(ws, monkeypatch):
+    import subprocess
+
+    script = ws.path("scripts/teams-export.ps1").read_text(encoding="utf-8")
+    assert script.index("LanguageMode") < script.index("Get-Module")  # checked before anything that fails in CLM
+    monkeypatch.setattr("shutil.which", lambda name: "C:/Windows/powershell.exe" if name == "powershell" else None)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 5))
+    with pytest.raises(RuntimeError, match="Constrained Language Mode") as e:
+        teams.export(ws, "powershell")
+    assert "probe-outlook" in str(e.value) and "import-text" in str(e.value)
+
+
+class _Folders:
+    def __init__(self, hidden=None):
+        self.hidden = hidden or {}
+        self.Count = 0  # hidden folders are not enumerated
+
+    def Item(self, key):
+        if key in self.hidden:
+            return self.hidden[key]
+        raise KeyError(key)
+
+
+class _Folder:
+    def __init__(self, name, folders=None, items=0):
+        self.Name, self.FolderPath, self.Folders = name, "\\\\me\\" + name, folders or _Folders()
+        self.Items = type("Items", (), {"Count": items})()
+
+
+def test_probe_finds_hidden_teams_folder_by_name(ws, monkeypatch):
+    from kbmail import outlook
+
+    teams_folder = _Folder("TeamsMessagesData", items=42)
+    root = _Folder("me", _Folders({"TeamsMessagesData": teams_folder}))
+    store = type(
+        "Store", (), {"DisplayName": "me@corp", "IsCachedExchange": True, "GetRootFolder": lambda self: root}
+    )()
+    stores = type("Stores", (), {"Count": 1, "Item": lambda self, i: store})()
+    inbox = type("Inbox", (), {"Parent": root})()
+    ns = type("NS", (), {"GetDefaultFolder": lambda self, n: inbox, "Stores": stores})()
+    monkeypatch.setattr(outlook, "connect", lambda: ns)
+    lines = []
+    assert teams.probe_outlook(ws, log=lines.append) is True
+    assert any("cached Exchange mode" in x for x in lines) and any("42 item(s)" in x for x in lines)
+    # Not there at all -> the no-API routes are suggested.
+    root.Folders = _Folders()
+    lines.clear()
+    assert teams.probe_outlook(ws, log=lines.append) is False
+    assert "import-text" in lines[-1]

@@ -319,7 +319,15 @@ def export_powershell(ws: Workspace, days: int | None = None, log=print) -> dict
         cmd += ["-Days", str(days)]
     res = subprocess.run(cmd, cwd=ws.root)
     if res.returncode != 0:
-        raise RuntimeError(f"{PS_SCRIPT} exited with {res.returncode} (see its output above)")
+        why = {
+            3: "Microsoft Graph PowerShell is not installed",
+            4: "sign-in or consent was refused for Chat.Read",
+            5: "PowerShell runs in Constrained Language Mode (application control) on this computer",
+        }.get(res.returncode, "see its output above")
+        raise RuntimeError(
+            f"{PS_SCRIPT} exited with {res.returncode}: {why}. Try `kbmail teams probe-outlook` "
+            f"(teams.via: outlook), or: {NO_API_ROUTES}"
+        )
     return import_graph_json(ws, log=log)
 
 
@@ -469,12 +477,25 @@ def import_text(ws: Workspace, paths: list[str], title: str | None = None, log=p
 # ---------------------------------------------------------------- Outlook route (experimental)
 
 TEAMS_FOLDER_NAMES = {"teamsmessagesdata", "team chat", "teamchat"}
+TEAMS_FOLDER_LOOKUP = ("TeamsMessagesData", "Team Chat", "TeamChat")
+NO_API_ROUTES = (
+    "Routes that need no API: Share to Outlook (the threads arrive as mail), "
+    "`kbmail teams import-text <file>` for chats copied from the Teams window, and meeting transcripts "
+    "(.vtt/.docx) dropped into raw/inbox/ -> `kbmail raw import`. See docs/teams.md."
+)
 
 
 def _find_teams_folder(ns, log=print):
     from kbmail.outlook import _safe
 
     root = ns.GetDefaultFolder(6).Parent
+    roots = [root, *[_safe(lambda s=s: s.GetRootFolder()) for s in _stores(ns)]]
+    for r in [x for x in roots if x is not None]:
+        # Hidden folders can be missing from enumeration but still open by name.
+        for name in TEAMS_FOLDER_LOOKUP:
+            f = _safe(lambda r=r, name=name: r.Folders.Item(name))
+            if f is not None:
+                return f
     stack = [(root, 0)]
     while stack:
         f, depth = stack.pop()
@@ -487,17 +508,33 @@ def _find_teams_folder(ns, log=print):
     return None
 
 
+def _stores(ns) -> list:
+    from kbmail.outlook import _safe
+
+    stores = _safe(lambda: ns.Stores)
+    return [stores.Item(i) for i in range(1, _safe(lambda: stores.Count, 0) + 1)] if stores is not None else []
+
+
 def probe_outlook(ws: Workspace, log=print) -> bool:
     from kbmail.outlook import _safe, connect
 
     ns = connect()
+    for st in _stores(ns):
+        cached = _safe(lambda st=st: st.IsCachedExchange)
+        mode = {True: "cached Exchange mode", False: "online mode"}.get(cached, "unknown mode")
+        log(f"Mailbox store: {_safe(lambda st=st: st.DisplayName, '?')} ({mode})")
     f = _find_teams_folder(ns)
     if f is None:
-        log("No Teams chat folder is visible to Outlook COM in this profile. Use the Graph route (docs/teams.md).")
+        log(
+            "No Teams chat folder is visible to Outlook COM in this profile. In cached Exchange mode Outlook often "
+            "does not sync it. " + NO_API_ROUTES
+        )
         return False
     n = _safe(lambda: f.Items.Count, 0)
     log(f"Found {f.FolderPath} with {n} item(s). Try: kbmail teams export --via outlook --days 7")
-    return True
+    if n == 0:
+        log("The folder is empty in this profile (not synced). " + NO_API_ROUTES)
+    return n > 0
 
 
 def export_outlook(ws: Workspace, days: int | None = None, log=print) -> dict:

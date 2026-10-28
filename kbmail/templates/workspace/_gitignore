@@ -1,7 +1,58 @@
-# This workspace holds private mail. If you version it with git, keep the remote private.
-state/msal_cache.bin
-state/*.tmp
-**/~$*
+# >>> kbmail managed (refreshed by `kbmail init --upgrade`; put your own rules outside this block) >>>
+#
+# Tracked: what you and Copilot authored, plus what delta runs need to continue on another machine:
+#   wiki/, raw/ (formatted sources), config/, kbmail.yaml, AGENTS.md, .github/, .vscode/,
+#   .env.example, review/questions.yaml, review/images/descriptions.yaml + *.mmd,
+#   state/{labels,kb_selection,kb_convert,images,runs}.json, state/wiki_*, state/rules_history/
+# Ignored: the raw mail export (re-exportable from Outlook), generated queues, secrets, binaries.
+# Before pushing anything: `kbmail git check` (also runs as the .githooks/pre-commit hook).
 
-# local settings (see .env.example)
+# Secrets and machine-local settings
 .env
+state/msal_cache.bin
+
+# Raw mail/calendar/Teams export: bulky, most sensitive, re-created by `kbmail export`
+data/
+
+# Generated queues and scratch files (re-created by `kbmail sync`)
+work/
+**/*.tmp
+
+# State tied to the local export, or derived and regenerable
+state/*
+!state/labels.json
+!state/kb_selection.json
+!state/kb_convert.json
+!state/images.json
+!state/runs.json
+!state/wiki_manifest.json
+!state/wiki_audit.jsonl
+!state/wiki_snapshots/
+!state/rules_history/
+
+# Human to-do area: keep only answers, image descriptions and Mermaid conversions
+review/*
+!review/questions.yaml
+!review/images/
+review/images/*
+!review/images/descriptions.yaml
+!review/images/*.mmd
+
+# Original documents dropped for import (the converted Markdown in raw/docs/ is tracked)
+raw/inbox/
+
+# Email drafts are working files; remove this line to version them too
+drafts/
+
+# Wiki-only mode: uncomment to keep the formatted source threads out of the repo
+# (wiki pages still cite them; `kbmail wiki lint` then reports them as missing on other clones)
+# raw/email/
+# raw/teams/
+
+# Editor / OS noise
+**/~$*
+.DS_Store
+Thumbs.db
+desktop.ini
+.github/hooks/*.log
+# <<< kbmail managed <<<

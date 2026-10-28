@@ -308,9 +308,10 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
             continue
         sig = _signature(msgs)
         prev = conv.get(tid)
-        if prev and prev.get("signature") == sig and not force:
+        unchanged = bool(prev) and prev.get("signature") == sig and not force
+        if unchanged and (ws.path(CONVERT_DIR, tid, "thread.src.md").exists() or is_formatted(ws, prev)):
             stats["unchanged"] += 1
-            continue
+            continue  # (work/ is not in git: a fresh clone rebuilds unformatted threads here)
         areas = (t or {}).get("areas") or (prev or {}).get("areas") or []
         target = (prev or {}).get("raw_target") or _raw_target(ws, tid, msgs, areas, s.get("title", ""))
         parts = [

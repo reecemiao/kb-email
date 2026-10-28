@@ -98,6 +98,31 @@ security commonly blocks. From 0.12.13 on, uv builds the launcher in memory inst
 **`build_system.requires = ["uv-build…"]` does not contain the current uv version**: fixed in
 `pyproject.toml`. Run `git pull`.
 
+## Version control (GitHub)
+
+The workspace can be its own **private** git repository. You get a reviewable history of every
+change Copilot makes to the wiki, a backup, and a way to move to another machine. `kbmail init`
+writes a `.gitignore` that tracks what you and Copilot authored:
+- `wiki/` and `raw/` (except `raw/inbox/`)
+- `config/`, `kbmail.yaml`, `.env.example`
+- `AGENTS.md`, `.github/`, `.vscode/`, `.githooks/`
+- your answers, image descriptions and Mermaid conversions under `review/`
+- the state that delta runs need on another machine: labels, KB choices, image descriptions,
+  the wiki manifest and snapshots, rules history
+
+The raw mail export (`data/`), generated queues (`work/`), `.env`, the Teams token cache and
+images extracted from mail stay out.
+
+```powershell
+kbmail git setup          # git init + pre-commit check that blocks mail exports, tokens and secrets
+gh repo create <owner>/<name> --private --source . --remote origin
+kbmail git check          # what would be pushed, and any problems
+git add -A; git commit -m "Knowledge base snapshot"; git push -u origin main
+```
+
+The workspace's own `README.md` has the full table of what is tracked and why, the routine, and
+how to restore on another machine.
+
 ## Settings: `kbmail.yaml` and `.env`
 
 Every setting has a built-in default, and every CLI option that isn't a one-off action (ids, paths,

@@ -80,6 +80,11 @@ def raw_import(ws: Workspace, log=print) -> int:
 # ---------------------------------------------------------------- delta queue
 
 
+def _content_hash(data: bytes) -> str:
+    """sha256 that ignores CRLF/LF differences, so git checkouts on any OS agree with the manifest."""
+    return sha256_bytes(data.replace(b"\r\n", b"\n"))
+
+
 def _raw_files(ws: Workspace) -> dict[str, Path]:
     out = {}
     raw = ws.path("raw")
@@ -99,10 +104,10 @@ def compute_queue(ws: Workspace) -> dict[str, list[str]]:
     files = _raw_files(ws)
     new, changed = [], []
     for rel, f in files.items():
-        h = sha256_bytes(f.read_bytes())
+        data = f.read_bytes()
         if rel not in man:
             new.append(rel)
-        elif man[rel]["sha256"] != h:
+        elif man[rel]["sha256"] not in (_content_hash(data), sha256_bytes(data)):  # 2nd: manifests before 0.1.1
             changed.append(rel)
     deleted = [rel for rel in man if rel not in files]
     return {"new": new, "changed": changed, "deleted": deleted}
@@ -178,7 +183,7 @@ def mark(ws: Workspace, paths: list[str], all_queued: bool = False, log=print) -
                 continue
             data = f.read_bytes()
             op = "update" if rel in man else "ingest"
-            man[rel] = {"sha256": sha256_bytes(data), "ingested_at": now_iso()}
+            man[rel] = {"sha256": _content_hash(data), "ingested_at": now_iso()}
             snap = _snap(ws, rel)
             snap.parent.mkdir(parents=True, exist_ok=True)
             snap.write_bytes(data)

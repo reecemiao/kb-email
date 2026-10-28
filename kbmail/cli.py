@@ -327,6 +327,20 @@ def cmd_hook(args):
     print(json.dumps(out, ensure_ascii=False))
 
 
+def cmd_git(args):
+    from kbmail import gitops
+
+    ws = _ws(args)
+    try:
+        if args.action == "setup":
+            gitops.setup(ws)
+            return 0
+        return gitops.check(ws, staged=args.staged)
+    except gitops.GitError as e:
+        print(f"git: {e}", file=sys.stderr)
+        return 2
+
+
 def cmd_config(args):
     from kbmail.workspace import env_example, env_name
 
@@ -507,6 +521,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--via", choices=["graph", "outlook"], help="(default: teams.via)")
     s.add_argument("--days", type=int, help="look-back window (default: teams.days, or since last export)")
     s.set_defaults(func=cmd_teams)
+
+    s = sub.add_parser("git", help="version the workspace safely: setup (init + pre-commit check) / check")
+    s.add_argument("action", choices=["setup", "check"])
+    s.add_argument("--staged", action="store_true", help="(check) only what is staged for commit")
+    s.set_defaults(func=cmd_git)
 
     s = sub.add_parser("hook", help="agent hook entry points (used by .github/hooks/kbmail.json)")
     s.add_argument("event", choices=["session-start"])

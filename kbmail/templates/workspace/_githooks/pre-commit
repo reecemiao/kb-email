@@ -1,0 +1,11 @@
+#!/bin/sh
+# kbmail workspace pre-commit hook: refuse to commit raw mail exports, secrets or tokens.
+# Enable once per clone:  git config core.hooksPath .githooks   (or: kbmail git setup)
+# Bypass for a single commit (only after checking!):  git commit --no-verify
+for cmd in kbmail kbmail.cmd; do   # kbmail.cmd: the shim from the kbmail README troubleshooting section
+  if command -v "$cmd" >/dev/null 2>&1; then
+    exec "$cmd" git check --staged
+  fi
+done
+echo "kbmail is not on PATH: the kbmail pre-commit check did not run." >&2
+exit 0

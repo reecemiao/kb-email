@@ -19,6 +19,7 @@ any command for details.
 | `kbmail sync [--no-export] [--teams]` | delta run of every deterministic step, then status |
 | `kbmail hook session-start` | JSON status context for the session-start hook (used by `.github/hooks/kbmail.json`) |
 | `kbmail init [path] [--upgrade]` | create a workspace, or refresh skills/agents/schema in it |
+| `kbmail git setup` / `kbmail git check [--staged]` | git init + pre-commit check / list problems (raw exports, tokens, secrets) before a commit |
 
 ## Getting mail in
 

@@ -450,7 +450,17 @@ class Workspace:
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "workspace"
 # Hidden folders can't be shipped reliably as package data, so they are stored with a
 # leading underscore and renamed on copy.
-_RENAMES = {"_github": ".github", "_vscode": ".vscode", "_gitignore": ".gitignore"}
+_RENAMES = {
+    "_github": ".github",
+    "_vscode": ".vscode",
+    "_githooks": ".githooks",
+    "_gitignore": ".gitignore",
+    "_gitattributes": ".gitattributes",
+}
+# Files holding a kbmail-managed block: only that block is replaced on upgrade, user lines stay.
+_MANAGED_BLOCK_FILES = {".gitignore", ".gitattributes"}
+_BLOCK_START = "# >>> kbmail managed"
+_BLOCK_END = "# <<< kbmail managed <<<"
 # Files the user is expected to edit: never overwritten by `init --upgrade`.
 _USER_OWNED = {
     CONFIG_NAME,
@@ -504,6 +514,18 @@ def _remove_obsolete(target: Path) -> list[str]:
     return removed
 
 
+def merge_managed_block(existing: str, template: str) -> str:
+    """Replace the kbmail block in `existing` with the one from `template`; keep all other lines."""
+    block = template.strip("\n")
+    start, end = existing.find(_BLOCK_START), existing.find(_BLOCK_END)
+    if start != -1 and end > start:
+        end += len(_BLOCK_END)
+        return existing[:start] + block + existing[end:]
+    # No block yet (older workspace or a hand-made file): keep the user's lines after ours.
+    rest = existing.strip("\n")
+    return block + ("\n\n# Your rules\n" + rest if rest else "") + "\n"
+
+
 def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
     target = Path(target).resolve()
     target.mkdir(parents=True, exist_ok=True)
@@ -516,6 +538,13 @@ def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
         rel_parts = [_RENAMES.get(p, p) for p in src.relative_to(TEMPLATE_DIR).parts]
         rel = "/".join(rel_parts)
         dst = target.joinpath(*rel_parts)
+        if rel in _MANAGED_BLOCK_FILES and dst.exists():
+            old = dst.read_text(encoding="utf-8")
+            new = merge_managed_block(old, src.read_text(encoding="utf-8"))
+            if new != old:
+                dst.write_text(new, encoding="utf-8")
+                written.append(rel)
+            continue
         if dst.exists() and (not upgrade or rel in _USER_OWNED):
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -524,6 +553,8 @@ def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
             dst.write_text(text, encoding="utf-8")
         else:
             shutil.copyfile(src, dst)
+        if rel.startswith(".githooks/"):
+            dst.chmod(0o755)  # git runs hooks only when executable (ignored on Windows)
         written.append(rel)
     # Generated from DEFAULT_CONFIG so it always lists every current setting.
     (target / ".env.example").write_text(env_example(), encoding="utf-8")

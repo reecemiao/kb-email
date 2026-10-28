@@ -36,6 +36,8 @@ chats. Python (`kbmail` CLI) does all deterministic work; you do the reading, ju
   subagents are available, give each batch to a subagent, so the main conversation stays small.
 - When you don't understand something (acronym, system, person, missing context, a document you need),
   don't guess: record it with `kbmail questions add "<question>" --context "<where you saw it>" --step <skill name>`.
+- Git: the workspace may be a git repository (see README.md). Commit or push only when the user asks.
+  Never `git add -f` an ignored file, and run `kbmail git check` before committing.
 - Privacy: content is confidential. Never send it to external services or web searches. Never copy
   credentials, personal data unrelated to work, or HR/medical details into raw/ or wiki/.
 - Language: write knowledge in the language of the source unless the user asks otherwise; keep names

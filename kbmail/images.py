@@ -50,6 +50,9 @@ def register(ws: Workspace, reg: dict, data: bytes, ext: str, source: dict) -> s
     if ext not in SVG_EXT and len(data) < ws.cfg("images.min_bytes", 6000):
         return None
     iid = "img_" + sha256_bytes(data)[:10]
+    if iid in reg and not ws.path(reg[iid]["file"]).exists():
+        ws.path(reg[iid]["file"]).parent.mkdir(parents=True, exist_ok=True)
+        ws.path(reg[iid]["file"]).write_bytes(data)  # fresh clone: image files are not in git
     if iid not in reg:
         p = ws.path(DIR, iid + ext)
         p.parent.mkdir(parents=True, exist_ok=True)

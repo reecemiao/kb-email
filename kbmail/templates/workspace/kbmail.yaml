@@ -64,7 +64,9 @@ wiki:
   stale_below: 0.35
 
 teams:
-  tenant: organizations    # or your tenant id / domain
-  client_id: ""            # Entra ID app (public client) allowed to use Chat.Read - see docs/teams.md
+  via: powershell          # powershell (scripts/teams-export.ps1, no app registration) | graph | outlook
+  import_dir: data/teams-graph
+  tenant: organizations    # graph route only: your tenant id / domain
+  client_id: ""            # graph route only: Entra app id with Chat.Read (needs IT) - see docs/teams.md
   days: 30
   token_cache: state/msal_cache.bin

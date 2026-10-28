@@ -209,11 +209,20 @@ When you next open VS Code, `/kb-sync` picks up the prepared queues.
 
 ## Teams
 
-The same pipeline works on Teams chats: each chat-day becomes one record (`source: teams`). The
-recommended route is Microsoft Graph with delegated `Chat.Read` (`kbmail teams export`). It needs an
-app registration your tenant allows. An experimental Outlook route reads the hidden
-`TeamsMessagesData` folder when your profile exposes it (`kbmail teams probe-outlook`). See
-[docs/teams.md](docs/teams.md) for what is feasible and what is not.
+The same pipeline works on Teams chats: each chat-day becomes one record (`source: teams`). No
+access to the Entra ID portal is needed:
+
+- **Graph PowerShell** (default): `scripts/teams-export.ps1` signs in with Microsoft's own Graph
+  PowerShell app (`Install-Module Microsoft.Graph.Authentication -Scope CurrentUser`, no admin).
+  `kbmail teams export` runs it and imports the result, with deltas. Run
+  `.\scripts\teams-export.ps1 -Test` first to see whether your tenant allows it.
+- **No API at all:** "Share to Outlook" for important threads (they arrive as mail),
+  `kbmail teams import-text` for chats copied from the Teams window, and meeting transcripts
+  (`.vtt`/`.docx`) dropped into `raw/inbox/`.
+- **Also available:** Outlook's hidden Teams folder (`kbmail teams probe-outlook`), or your own app
+  registration if IT creates one.
+
+See [docs/teams.md](docs/teams.md) for how to pick a route and what to do if the test fails.
 
 ## More
 

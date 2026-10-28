@@ -41,9 +41,36 @@ def _markitdown():
     return _md
 
 
+def vtt_to_markdown(text: str) -> str:
+    """WebVTT meeting transcript (Teams 'Download transcript') -> speaker-attributed Markdown."""
+    out: list[str] = []
+    last_speaker, start = None, ""
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if not lines or lines[0].startswith(("WEBVTT", "NOTE", "STYLE")):
+            continue
+        cue = next((ln for ln in lines if "-->" in ln), None)
+        body = lines[lines.index(cue) + 1 :] if cue else lines
+        if cue:
+            start = cue.split("-->")[0].strip().split(".")[0]
+        for ln in body:
+            m = re.match(r"<v\s+([^>]+)>(.*?)(?:</v>)?$", ln)
+            speaker, said = (m.group(1).strip(), m.group(2)) if m else (None, ln)
+            said = re.sub(r"<[^>]+>", "", said).strip()
+            if not said:
+                continue
+            if speaker and speaker != last_speaker:
+                out.append(f"\n**{speaker}** ({start}):")
+                last_speaker = speaker
+            out.append(said)
+    return ("# Meeting transcript\n" + "\n".join(out)).strip() + "\n"
+
+
 def file_to_markdown(path: Path) -> tuple[str, str | None]:
     """Return (markdown, error). Never raises."""
     ext = path.suffix.lower()
+    if ext == ".vtt":
+        return vtt_to_markdown(path.read_text(encoding="utf-8-sig", errors="replace")), None
     if ext in TEXT_EXT:
         return path.read_text(encoding="utf-8", errors="replace"), None
     md = _markitdown()

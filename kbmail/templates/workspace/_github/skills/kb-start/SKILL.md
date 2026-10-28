@@ -12,6 +12,10 @@ user whenever a stage needs them (marked USER).
 2. Export: ask how many days, then run `kbmail export --days <n>` (default Inbox + Sent Items, no
    subfolders; mention `--include-subfolders`, `--all-folders`, `--folder`). On non-Windows machines the
    user can use `kbmail import-eml <folder>` instead.
+   Optional, Teams chats: ask the user to run `.\scripts\teams-export.ps1 -Test` (needs
+   `Install-Module Microsoft.Graph.Authentication -Scope CurrentUser`). If it prints OK, run
+   `kbmail teams export`. If not, explain the no-API routes in docs/teams.md (Share to Outlook,
+   `kbmail teams import-text`, meeting transcripts into `raw/inbox/`).
 3. Labeling: `kbmail label prepare`, then follow `/kb-label` for every batch, then `kbmail label import`.
 4. USER: ask the user to run `kbmail review` in a terminal (interactive; or `kbmail review export-csv`
    for Excel). Wait until they say they are done.

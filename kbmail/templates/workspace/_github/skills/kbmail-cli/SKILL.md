@@ -27,7 +27,9 @@ any command for details.
 |---|---|
 | `kbmail export [--days N] [--include-subfolders] [--all-folders] [--folder F]... [--no-calendar] [--calendar-only] [--force]` | Outlook mail + calendar (Windows); delta by default |
 | `kbmail import-eml <file-or-folder>...` | import saved .eml files |
-| `kbmail teams export [--via graph\|outlook] [--days N]` | Teams chats as chat-day records |
+| `kbmail teams export [--via powershell\|graph\|outlook] [--days N]` | Teams chats as chat-day records (powershell = scripts/teams-export.ps1, no app registration) |
+| `kbmail teams import [json files/folders]` | import saved Graph JSON (default folder `data/teams-graph`) |
+| `kbmail teams import-text <file.txt>... [--title T]` | import chats copied from the Teams window |
 | `kbmail teams probe-outlook` | check whether Outlook exposes the Teams chat folder |
 
 ## Reading mail

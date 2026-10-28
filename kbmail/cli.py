@@ -83,16 +83,13 @@ def cmd_sync(args):
                 outlook.export_calendar(ws)
         except Exception as e:  # keep going: the rest works on what is already exported
             print(f"(export skipped: {e})")
-        if ws.opt(args.teams, "sync.teams"):
-            from kbmail import teams
+    if ws.opt(args.teams, "sync.teams"):
+        from kbmail import teams
 
-            try:
-                if ws.cfg("teams.via") == "outlook":
-                    teams.export_outlook(ws)
-                else:
-                    teams.export_graph(ws)
-            except Exception as e:
-                print(f"(teams export skipped: {e})")
+        try:
+            teams.export(ws, ws.cfg("teams.via"))
+        except Exception as e:  # e.g. not signed in; the rest of the sync still runs
+            print(f"(teams export skipped: {e})")
     rules.apply_rules(ws)
     prepare_batches(ws)
     kb.prepare_select(ws)
@@ -301,10 +298,19 @@ def cmd_teams(args):
     ws = _ws(args)
     if args.action == "probe-outlook":
         teams.probe_outlook(ws)
-    elif ws.opt(args.via, "teams.via") == "outlook":
-        teams.export_outlook(ws, args.days)
+    elif args.action == "import":
+        teams.import_graph_json(ws, args.paths or None)
+    elif args.action == "import-text":
+        if not args.paths:
+            print("give the text file(s) you pasted the chat into", file=sys.stderr)
+            return 2
+        teams.import_text(ws, args.paths, title=args.title)
     else:
-        teams.export_graph(ws, args.days)
+        try:
+            teams.export(ws, ws.opt(args.via, "teams.via"), args.days)
+        except RuntimeError as e:
+            print(f"teams: {e}", file=sys.stderr)
+            return 1
 
 
 def cmd_hook(args):
@@ -516,9 +522,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("path")
     s.set_defaults(func=cmd_draft_outlook)
 
-    s = sub.add_parser("teams", help="Teams chats (Graph or Outlook route)")
-    s.add_argument("action", choices=["export", "probe-outlook"])
-    s.add_argument("--via", choices=["graph", "outlook"], help="(default: teams.via)")
+    s = sub.add_parser("teams", help="Teams chats: export (powershell/graph/outlook), import saved JSON or pasted text")
+    s.add_argument("action", choices=["export", "import", "import-text", "probe-outlook"])
+    s.add_argument(
+        "paths", nargs="*", help="(import) JSON files/folders, default teams.import_dir; (import-text) text files"
+    )
+    s.add_argument("--via", choices=["powershell", "graph", "outlook"], help="(export) route (default: teams.via)")
+    s.add_argument("--title", help="(import-text) chat title (default: the file name)")
     s.add_argument("--days", type=int, help="look-back window (default: teams.days, or since last export)")
     s.set_defaults(func=cmd_teams)
 

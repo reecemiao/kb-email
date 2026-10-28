@@ -22,47 +22,66 @@ haven't mailed you recently.
 
 ```powershell
 uv tool install -e ".[directory]" --reinstall     # ldap3, pycryptodome (NTLM), winkerberos (Windows)
+kbmail directory init                             # creates config/directory.yaml from the example
 kbmail directory test                             # bind + look yourself up
-kbmail directory lookup someone@example.com       # one person as JSON
+kbmail directory lookup someone@example.com       # one person, rendered with your `view`
 kbmail directory sync                             # you + people digest -> state/directory.json
 ```
 
 `kbmail people build` (part of `kbmail sync`) then fills the `org` column of
-`work/people/PEOPLE_DIGEST.md`, and `/kb-people` uses it. With `directory.enabled: true`,
-`kbmail sync` also refreshes the cache. It never prompts, so it needs Kerberos or the password in
-the environment (see below).
+`work/people/PEOPLE_DIGEST.md`, and `/kb-people` uses it. With `enabled: true`, `kbmail sync`
+also refreshes the cache. It never prompts, so it needs Kerberos or the password in the
+environment (see below).
+
+### Used as a general tool (outside a workspace)
+
+The code is generic. Everything company-specific lives in one YAML file, the same format as
+`config/directory.yaml`:
+
+```powershell
+kbmail directory init --config C:\Users\me\.kbmail\directory.yaml    # copy the example
+kbmail directory lookup a.person@example.com                           # uses ~/.kbmail/directory.yaml
+kbmail directory lookup --config D:\profiles\corp.yaml a.person@example.com --view record
+```
+
+kbmail looks for the settings in this order:
+1. `--config FILE`
+2. the workspace's `config/directory.yaml` (over `directory:` in `kbmail.yaml`)
+3. `$KBMAIL_DIRECTORY_CONFIG`
+4. `~/.kbmail/directory.yaml`
 
 ## Configuration
 
-Put your company's values in your **workspace** `kbmail.yaml` (or `.env`), not in the tool repo.
-The defaults fit a standard Active Directory:
+Put your company's values in `config/directory.yaml` (git-ignored in the workspace; see
+`config/directory.example.yaml`), never in the tool repo. Single settings can also be overridden
+with `KBMAIL_DIRECTORY__*` variables. The defaults fit a standard Active Directory:
 
 ```yaml
-directory:
-  enabled: true
-  server: ldap.example.com
-  port: 636                  # LDAPS; 3269 = AD global catalog over SSL
-  use_ssl: true
-  ca_certs_file: 'C:\Users\me\certs\corp-ca.pem'   # your company's CA bundle (single quotes for backslashes)
-  auth: ntlm                 # ntlm | kerberos | simple | anonymous
-  user: ''                   # empty = %USERDOMAIN%\%USERNAME%
-  search_base: 'OU=People,DC=example,DC=com'
-  scope: subtree             # subtree | level | base
-  email_filter: '(|(mail={email})(proxyAddresses=smtp:{email}))'
-  id_filter: '(|(employeeID={id})(cn={id}))'
-  fields:                    # kbmail name -> LDAP attributes, first non-empty wins
-    name: [displayName]
-    email: [mail]
-    title: [title]
-    department: [department]
-    company: [company]
-    office: [physicalDeliveryOfficeName]
-    country: [co]
-    employee_id: [employeeID]
-  relations:                 # references to other people
-    manager: {dn: [manager], id: [], name: []}
-    assistant: {dn: [assistant], id: [], name: []}
-  digest_fields: [title, department, company, office, country]
+# config/directory.yaml
+enabled: true
+server: ldap.example.com
+port: 636                  # LDAPS; 3269 = AD global catalog over SSL
+use_ssl: true
+ca_certs_file: 'C:\Users\me\certs\corp-ca.pem'   # your company's CA bundle (single quotes for backslashes)
+auth: ntlm                 # ntlm | kerberos | simple | anonymous
+user: ''                   # empty = %USERDOMAIN%\%USERNAME%
+search_base: 'OU=People,DC=example,DC=com'
+scope: subtree             # subtree | level | base
+email_filter: '(|(mail={email})(proxyAddresses=smtp:{email}))'
+id_filter: '(|(employeeID={id})(cn={id}))'
+fields:                    # kbmail name -> LDAP attributes, first non-empty wins
+  name: [displayName]
+  email: [mail]
+  title: [title]
+  department: [department]
+  company: [company]
+  office: [physicalDeliveryOfficeName]
+  country: [co]
+  employee_id: [employeeID]
+relations:                 # references to other people
+  manager: {dn: [manager], id: [], name: []}
+  assistant: {dn: [assistant], id: [], name: []}
+digest_fields: [title, department, company, office, country]
 ```
 
 ### Custom directory schemas
@@ -82,6 +101,48 @@ Many companies extend the schema. Map their attributes with `fields` and `relati
   add conditions, e.g. `'(&(objectClass=top)(mail={email}))'`.
 
 Values substituted into `{email}` and `{id}` are LDAP-escaped.
+
+### Output views (your own lookup card)
+
+`kbmail directory lookup` prints the plain record (`--view record`), or a layout you define in
+YAML under `views`, selected with `view:`. That is how a company's existing lookup script can be
+replaced without any company code: sections, labels and formatting rules are all data.
+
+```yaml
+view: card
+computed:                       # helpers, used as {=name}
+  given: {join: " ", parts: ["{givenName}", "{middleName}"]}
+views:
+  card:
+    Basic Information:
+      Name: {first: ["[{displayName} ({=given})]", "{displayName}"]}   # "A (B)" if both, else A
+      Grade: "{extensionAttribute3|map:U=Unknown|default:Unknown}"
+      Employee Type: "{employeeType|map:E=Employee;*=Contractor}"
+      Account: {join: "\\", parts: ["{msDS-PrincipalName}"]}
+      Title: {value: "{personalTitle|upper}", omit_empty: true}
+    Detailed Information:
+      Manager: "{@manager.name}[ ({@manager.id})]"
+      Phone: "{telephoneNumber}[  (ext. {ipPhone})]"
+      Mobile: {value: "+{x-countrycode} {mobile}", when: "{mobile}"}
+      Office: "{postalAddress|oneline}"
+```
+
+| syntax | meaning |
+|---|---|
+| `{attr}` | first value of an LDAP attribute (case-insensitive) |
+| `{attr\|upper}` `\|lower` `\|title` `\|strip` | text filters |
+| `{attr\|oneline}` | line breaks to `, `, and duplicate commas/blank lines removed |
+| `{attr\|map:K=V;K2=V2;*=fallback}` | value mapping (`*` also catches empty) |
+| `{attr\|default:text}` | text when empty |
+| `{@relation.name}` / `.email` / `.id` / `.title` | a resolved relation |
+| `{=helper}` | a value from `computed` |
+| `[ ... ]` | optional part: dropped when any placeholder inside is empty |
+| `{join: sep, parts: [...]}` | non-empty parts joined |
+| `{first: [...]}` | first part that renders non-empty |
+| `{value: tpl, when: tpl}` | value only if `when` is non-empty |
+| `omit_empty: true` | leave the label out when empty |
+
+Views request the attributes they use automatically. `attributes: [...]` adds more.
 
 ### Authentication
 

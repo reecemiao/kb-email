@@ -80,7 +80,7 @@ AD = {  # standard Active Directory style: manager is a DN
 
 
 def test_lookup_resolves_manager_dn(ws):
-    d = directory.Directory(configure(ws), mock_connection(AD))
+    d = directory.Directory(configure(ws).config["directory"], mock_connection(AD))
     rec = d.lookup("TARO@contoso.com ")
     assert rec["found"] and rec["fields"]["title"] == "Payments Lead" and rec["fields"]["employee_id"] == "20"
     assert rec["relations"]["manager"] == {
@@ -156,20 +156,20 @@ def test_custom_schema_like_level_scope_and_id_references(ws):
             "assistant": {"id": ["x-secretaryid"]},
         },
     )
-    rec = directory.Directory(ws, mock_connection(entries)).lookup("me@corp.example")
+    rec = directory.Directory(ws.config["directory"], mock_connection(entries)).lookup("me@corp.example")
     rels = rec["relations"]
     assert rels["manager"]["email"] == "boss@corp.example" and rels["manager"]["title"] == "Head of Ops"
     assert rels["functional_manager"] == {"name": "CHAN, Func", "email": "", "id": "", "title": ""}  # name only
     assert rels["assistant"]["name"] == "WONG, Assistant" and rels["assistant"]["id"] == "901"
     # Filter values are escaped: an address with LDAP special characters cannot widen the search.
-    assert directory.Directory(ws, mock_connection(entries)).lookup("*)(mail=*")["found"] is False
+    assert directory.Directory(ws.config["directory"], mock_connection(entries)).lookup("*)(mail=*")["found"] is False
 
 
 def test_connect_requires_server_and_never_prompts_when_non_interactive(ws, monkeypatch):
-    with pytest.raises(directory.DirectoryError, match=r"directory\.server"):
-        directory.connect(ws)
+    with pytest.raises(directory.DirectoryError, match="server and search_base"):
+        directory.connect(ws.config["directory"])
     ws = configure(ws, use_ssl=False, auth="ntlm", user="CORP\\me")
     monkeypatch.delenv(directory.PASSWORD_ENV, raising=False)
     monkeypatch.setattr("getpass.getpass", lambda *a: pytest.fail("must not prompt"))
     with pytest.raises(directory.DirectoryError, match="KBMAIL_DIRECTORY_PASSWORD"):
-        directory.connect(ws, interactive=False)
+        directory.connect(ws.config["directory"], interactive=False)

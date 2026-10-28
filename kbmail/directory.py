@@ -44,17 +44,17 @@ def _first(attrs: dict, names: list[str]) -> str:
     return ""
 
 
-def connect(ws: Workspace, password: str | None = None, interactive: bool = True):
-    """Open a read-only, bound ldap3 connection from `directory.*` settings."""
+def connect(cfg: dict, password: str | None = None, interactive: bool = True):
+    """Open a read-only, bound ldap3 connection from `directory` settings (see `load_config`)."""
     try:
         import ssl
 
         import ldap3
     except ImportError as e:
         raise DirectoryError("Install the directory extra: uv tool install -e '.[directory]'") from e
-    c = ws.config["directory"]
+    c = cfg
     if not c["server"] or not c["search_base"]:
-        raise DirectoryError("Set directory.server and directory.search_base (kbmail.yaml or .env)")
+        raise DirectoryError("Set server and search_base in config/directory.yaml (see `kbmail directory init`)")
     tls = None
     if c["use_ssl"]:
         tls = ldap3.Tls(
@@ -91,6 +91,41 @@ def connect(ws: Workspace, password: str | None = None, interactive: bool = True
         raise DirectoryError(f"{type(e).__name__}: {e}{hint}") from e
 
 
+CONFIG_ENV = "KBMAIL_DIRECTORY_CONFIG"
+
+
+def user_config_path():
+    from pathlib import Path
+
+    return Path.home() / ".kbmail" / "directory.yaml"
+
+
+def load_config(path: str | None = None, ws: Workspace | None = None) -> dict:
+    """Directory settings: an explicit file, else the workspace, else $KBMAIL_DIRECTORY_CONFIG or
+    ~/.kbmail/directory.yaml (so `kbmail directory lookup` also works outside a workspace)."""
+    from pathlib import Path
+
+    import yaml
+
+    from kbmail.workspace import DEFAULT_CONFIG, deep_merge
+
+    base = ws.config["directory"] if ws is not None else DEFAULT_CONFIG["directory"]
+    if path is None and ws is not None:
+        return base
+    candidates = [Path(path)] if path else [Path(p) for p in [os.environ.get(CONFIG_ENV)] if p] + [user_config_path()]
+    for f in candidates:
+        if f.is_file():
+            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            data = data.get("directory", data) if isinstance(data, dict) else {}
+            return deep_merge(base, data)
+    if path:
+        raise DirectoryError(f"{path} not found")
+    raise DirectoryError(
+        f"No directory settings: run inside a kbmail workspace (config/directory.yaml), pass --config FILE, "
+        f"set {CONFIG_ENV}, or create {user_config_path()} (`kbmail directory init --config <file>`)"
+    )
+
+
 def default_user() -> str:
     dom, user = os.environ.get("USERDOMAIN", ""), os.environ.get("USERNAME") or getpass.getuser()
     return f"{dom}\\{user}" if dom else user
@@ -99,15 +134,19 @@ def default_user() -> str:
 class Directory:
     """Lookups over an ldap3 connection (real, or MOCK_SYNC in tests)."""
 
-    def __init__(self, ws: Workspace, connection):
+    def __init__(self, cfg: dict, connection):
+        from kbmail import directory_views
+
         self.conn = connection
-        self.cfg = ws.config["directory"]
+        self.cfg = cfg
         self.fields: dict[str, list[str]] = {k: list(v or []) for k, v in (self.cfg.get("fields") or {}).items()}
         self.relations: dict[str, dict] = self.cfg.get("relations") or {}
         attrs = {a for v in self.fields.values() for a in v}
         for spec in self.relations.values():
             attrs |= {a for key in ("dn", "id", "name") for a in (spec or {}).get(key) or []}
-        self.attributes = sorted(attrs)
+        attrs |= directory_views.attributes_used(cfg.get("views") or {}, cfg.get("computed") or {})
+        attrs |= set(cfg.get("attributes") or [])
+        self.attributes = sorted(attrs, key=str.casefold)
         self._shallow: dict[str, dict | None] = {}
 
     # ------------------------------------------------------------ raw searches
@@ -174,6 +213,22 @@ class Directory:
         raw = self.raw_by_email(email)
         return self.record(raw) if raw else {"found": False}
 
+    def card(self, email: str, view: str | None = None) -> dict:
+        """Look a person up and render a view from `views` (the plain record when there is none)."""
+        from kbmail import directory_views
+
+        raw = self.raw_by_email(email)
+        if raw is None:
+            return {"found": False, "email": email}
+        rec = self.record(raw)
+        name = view if view is not None else self.cfg.get("view") or ""
+        views = self.cfg.get("views") or {}
+        if not name or name == "record":
+            return {"email": email, **rec}
+        if name not in views:
+            raise DirectoryError(f"unknown view {name!r}; defined: {', '.join(views) or 'none'}")
+        return directory_views.render(views[name], raw, rec["relations"], self.cfg.get("computed") or {})
+
 
 # ---------------------------------------------------------------- sync / cache
 
@@ -194,8 +249,8 @@ def sync(
     cfg = ws.config["directory"]
     state = load(ws)
     people = state["people"]
-    conn = connection or connect(ws, interactive=interactive)
-    d = Directory(ws, conn)
+    conn = connection or connect(cfg, interactive=interactive)
+    d = Directory(cfg, conn)
     limit = limit or int(cfg["max_lookups"])
     days = int(cfg["cache_days"])
     done = {"looked_up": 0, "cached": 0, "not_found": 0}

@@ -34,8 +34,10 @@ CONFIG_NAME = "kbmail.yaml"
 OTHERS = "others"
 ENV_PREFIX = "KBMAIL_"
 ENV_WORKSPACE = "KBMAIL_WORKSPACE"
-# Secrets are read from the environment only; they are not settings and never appear in .env.example.
-ENV_SECRETS = {"KBMAIL_DIRECTORY_PASSWORD"}
+# Environment variables that are not settings (secrets, file locations): never in .env.example.
+ENV_SECRETS = {"KBMAIL_DIRECTORY_PASSWORD", "KBMAIL_DIRECTORY_CONFIG"}
+# Company-specific directory settings live in their own (git-ignored) file, merged into `directory`.
+DIRECTORY_FILE = "config/directory.yaml"
 ENV_FILE = ".env"
 
 DEFAULT_CONFIG: dict = {
@@ -104,6 +106,10 @@ DEFAULT_CONFIG: dict = {
             "assistant": {"dn": ["assistant"], "id": [], "name": []},
         },
         "digest_fields": ["title", "department", "company", "office", "country"],
+        "attributes": [],
+        "view": "",
+        "views": {},
+        "computed": {},
         "chain_depth": 3,
         "cache_days": 30,
         "max_lookups": 300,
@@ -182,6 +188,10 @@ CONFIG_HELP: dict[str, str] = {
     "directory.email_filter": "LDAP filter to find a person by e-mail ({email} is escaped)",
     "directory.id_filter": "LDAP filter to find a person by id, for id-based relations ({id} is escaped)",
     "directory.digest_fields": "directory fields shown in the people digest (keep phone numbers out of the wiki)",
+    "directory.attributes": "extra LDAP attributes to request (views request what they use automatically)",
+    "directory.view": "default view for `kbmail directory lookup` (empty = the plain record)",
+    "directory.views": "named output layouts (see config/directory.example.yaml)",
+    "directory.computed": "named helper values used by views as {=name}",
     "directory.chain_depth": "how many manager levels above you to resolve",
     "directory.cache_days": "re-fetch a person after this many days",
     "directory.max_lookups": "max directory lookups per run",
@@ -407,11 +417,16 @@ class Workspace:
         if self._config is None:
             p = self.path(CONFIG_NAME)
             user = (yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}) or {}
+            dp = self.path(DIRECTORY_FILE)
+            dfile = (yaml.safe_load(dp.read_text(encoding="utf-8")) if dp.exists() else {}) or {}
+            dfile = dfile.get("directory", dfile) if isinstance(dfile, dict) else {}
             env, env_sources, self.config_warnings = env_overrides(self.root)
-            self._config = deep_merge(deep_merge(DEFAULT_CONFIG, user), env)
+            self._config = deep_merge(deep_merge(deep_merge(DEFAULT_CONFIG, user), {"directory": dfile}), env)
             self.config_sources = {".".join(k): "default" for k in _leaf_paths(DEFAULT_CONFIG)}
             for k in _leaf_paths(user):
                 self.config_sources[".".join(k)] = CONFIG_NAME
+            for k in _leaf_paths({"directory": dfile}):
+                self.config_sources[".".join(k)] = DIRECTORY_FILE
             self.config_sources.update(env_sources)
         return self._config
 

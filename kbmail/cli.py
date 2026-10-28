@@ -278,35 +278,63 @@ def cmd_wiki(args):
 def cmd_directory(args):
     from kbmail import directory, people
 
-    ws = _ws(args)
     try:
-        if args.action == "lookup":
-            if not args.email:
-                print("give an e-mail address", file=sys.stderr)
-                return 2
-            conn = directory.connect(ws)
-            try:
-                d = directory.Directory(ws, conn)
-                for email in args.email:
-                    print(directory.as_json({"email": email, **d.lookup(email)}))
-            finally:
-                conn.unbind()
-        elif args.action == "test":
-            conn = directory.connect(ws)
-            try:
-                print(f"Bound to {ws.cfg('directory.server')} as {conn.extend.standard.who_am_i() or '(unknown)'}")
-                d = directory.Directory(ws, conn)
-                for email in sorted(ws.me_emails)[:1]:
-                    print(directory.as_json({"email": email, **d.lookup(email)}))
-            finally:
-                conn.unbind()
-        else:
+        ws = Workspace.find(args.workspace)
+    except WorkspaceError:
+        ws = None  # lookup/test/init also work standalone with --config or ~/.kbmail/directory.yaml
+    try:
+        if args.action == "init":
+            return _directory_init(ws, args.config)
+        if args.action == "sync":
+            if ws is None:
+                raise directory.DirectoryError("sync needs a kbmail workspace (it feeds the people digest)")
             people.build(ws, log=lambda *a: None)
             directory.sync(ws, limit=args.limit, refresh=args.refresh)
             people.build(ws)
+            return 0
+        cfg = directory.load_config(args.config, ws)
+        conn = directory.connect(cfg)
+        try:
+            d = directory.Directory(cfg, conn)
+            if args.action == "test":
+                print(f"Bound to {cfg['server']} as {conn.extend.standard.who_am_i() or '(unknown)'}")
+                emails = sorted(ws.me_emails)[:1] if ws else []
+            else:
+                emails = args.email
+                if not emails:
+                    print("give an e-mail address", file=sys.stderr)
+                    return 2
+            for email in emails:
+                print(directory.as_json(d.card(email, args.view)))
+        finally:
+            conn.unbind()
     except directory.DirectoryError as e:
         print(f"directory: {e}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _directory_init(ws, target: str | None) -> int:
+    import shutil
+
+    from kbmail.workspace import DIRECTORY_FILE, TEMPLATE_DIR
+
+    example = TEMPLATE_DIR / "config" / "directory.example.yaml"
+    if target:
+        dst = Path(target)
+    elif ws is not None:
+        dst = ws.path(DIRECTORY_FILE)
+    else:
+        from kbmail.directory import user_config_path
+
+        dst = user_config_path()
+    if dst.exists():
+        print(f"{dst} already exists; edit it (template: {example})")
+        return 0
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(example, dst)
+    print(f"Created {dst}. Fill in server, search_base, ca_certs_file and your schema, then `kbmail directory test`.")
+    return 0
 
 
 def cmd_people(args):
@@ -552,9 +580,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", choices=["build"], nargs="?", default="build")
     s.set_defaults(func=cmd_people)
 
-    s = sub.add_parser("directory", help="corporate directory (LDAP/AD): test | lookup <email> | sync people")
-    s.add_argument("action", choices=["test", "lookup", "sync"])
+    s = sub.add_parser("directory", help="corporate directory (LDAP/AD): init | test | lookup <email> | sync people")
+    s.add_argument("action", choices=["init", "test", "lookup", "sync"])
     s.add_argument("email", nargs="*", help="(lookup) e-mail address(es)")
+    s.add_argument(
+        "--config",
+        help="directory settings file (default: workspace config/directory.yaml, "
+        "$KBMAIL_DIRECTORY_CONFIG or ~/.kbmail/directory.yaml)",
+    )
+    s.add_argument("--view", help="(lookup/test) output view from `views` (record = raw fields/relations)")
     s.add_argument("--limit", type=int, help="(sync) max lookups this run (default: directory.max_lookups)")
     s.add_argument("--refresh", action="store_true", help="(sync) ignore the cache")
     s.set_defaults(func=cmd_directory)
@@ -603,7 +637,15 @@ def main(argv=None) -> int:
             stream.reconfigure(encoding="utf-8")  # Windows consoles + Japanese text
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args, extra = parser.parse_known_args(argv)
+    # argparse consumes a trailing `nargs="*"` positional (as empty) before options such as --config,
+    # so words after the options arrive here. Hand them to the command's list positional.
+    target = next((n for n in ("email", "paths", "text") if isinstance(getattr(args, n, None), list)), None)
+    if extra and target and not any(x.startswith("-") for x in extra):
+        getattr(args, target).extend(extra)
+    elif extra:
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
     if args.cmd == "wiki" and args.action == "search" and not args.query:
         args.query = args.paths
     try:

@@ -85,7 +85,7 @@ any command for details.
 | command | what it does |
 |---|---|
 | `kbmail people build` | relationship statistics → `work/people/PEOPLE_DIGEST.md` |
-| `kbmail directory test` / `lookup <email>...` / `sync [--refresh] [--limit N]` | corporate directory (LDAP/AD): check the connection / print one person / cache titles, departments, managers for the people digest |
+| `kbmail directory init` / `test` / `lookup <email>... [--view V]` / `sync [--refresh] [--limit N]` | corporate directory (LDAP/AD, settings in `config/directory.yaml`): create settings / check the connection / print one person / cache titles, departments, managers for the people digest |
 | `kbmail triage [--days N]` | needs-reply / follow-up / meetings → `work/triage/TRIAGE.md` |
 | `kbmail style [-n N]` | my sent mail samples → `work/style/SAMPLES.md` |
 | `kbmail draft-outlook drafts/<file>.md` | save a draft into Outlook Drafts (never sends) |

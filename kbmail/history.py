@@ -48,8 +48,8 @@ _INLINE_FIELD_RE = re.compile(
     r"\s+(?=[*_]*(?:" + "|".join(_FIELDS[k] for k in ("sent", "to", "cc", "subject")) + r")[*_]*\s*[:：])", re.I
 )
 _SEPARATOR_RE = re.compile(
-    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|元のメッセージ|転送されたメッセージ|原始邮件|原始郵件)"
-    r"\s*-{2,}|_{20,})\s*$",
+    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|original appointment|"
+    r"元のメッセージ|転送されたメッセージ|元の予定|原始邮件|原始郵件)\s*-{2,}|_{20,})\s*$",
     re.I,
 )
 _WROTE_RE = re.compile(

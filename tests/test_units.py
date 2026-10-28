@@ -88,3 +88,22 @@ def test_init_upgrade_keeps_user_files(tmp_path):
     assert (root / "kbmail.yaml").read_text(encoding="utf-8") == "areas: [mine]\n"
     assert prompt.read_text(encoding="utf-8") != "stale"
     assert "{{TODAY}}" not in (root / "wiki/overview.md").read_text(encoding="utf-8")
+
+
+def test_eml_meeting_reply_without_comment_is_skipped(ws, tmp_path):
+    from email.message import EmailMessage
+
+    from kbmail.importers import import_eml
+
+    d = tmp_path / "eml"
+    d.mkdir()
+    for n, text in enumerate(["", "Can we move it to 3pm? The vendor joins late."]):
+        m = EmailMessage()
+        m["Subject"], m["From"], m["To"] = "Accepted: Design review", "Ken <ken@x.com>", "taro@contoso.com"
+        m["Message-ID"] = f"<reply{n}@x>"
+        m.set_content(text or "\n")
+        m.add_alternative("BEGIN:VCALENDAR\nMETHOD:REPLY\nEND:VCALENDAR\n", subtype="calendar")
+        (d / f"{n}.eml").write_bytes(bytes(m))
+    assert import_eml(ws, [str(d)], log=lambda *a: None) == 1
+    (rec,) = message_index(ws).all()
+    assert rec["message_class"] == "IPM.Schedule.Meeting.Resp"

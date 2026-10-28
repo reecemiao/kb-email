@@ -28,6 +28,10 @@ outlook:
   save_attachments: true
   attachment_max_mb: 25
   overlap_hours: 24        # delta re-reads this much before the last watermark (de-duplicated)
+  skip_meeting_responses: true   # don't export Accepted/Declined/Tentative replies without a comment
+  boilerplate_lines:             # whole lines that don't count as a comment (regex), e.g. classification labels
+    - "(?i)(internal|public|confidential|restricted|highly restricted)"
+    - "社外秘|機密|社内限り"
 
 labeling:
   batch_size: 40           # messages per Copilot labeling batch

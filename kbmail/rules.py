@@ -182,7 +182,7 @@ def apply_rules(ws: Workspace, relabel_auto: bool = True, log=print) -> dict:
     n_new = n_changed = n_cleared = 0
     for rec in message_index(ws).all():
         cur = labels.get(rec["id"])
-        if cur and not (relabel_auto and cur.get("status") == "auto"):
+        if cur and not (relabel_auto and cur.get("status") == "auto" and cur.get("source") == "rule"):
             continue
         areas, _, hits = classify(rules, features(rec, _body_for_rules(ws, rec)))
         if areas is None:

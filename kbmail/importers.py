@@ -5,9 +5,11 @@ from __future__ import annotations
 import email
 import email.policy
 import re
+import shutil
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 
+from kbmail.noise import is_empty_response
 from kbmail.records import message_id_for, message_index, message_paths, write_message
 from kbmail.workspace import Workspace
 
@@ -22,7 +24,7 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
     for p in paths:
         p = Path(p)
         files.extend(sorted(p.rglob("*.eml")) if p.is_dir() else [p])
-    n = 0
+    n = skipped = 0
     for f in files:
         msg = email.message_from_bytes(f.read_bytes(), policy=email.policy.default)
         key = (msg.get("Message-ID") or "").strip() or f"file:{f.resolve()}"
@@ -55,6 +57,9 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
             "internet_message_id": key,
             "imported_from": str(f),
         }
+        cal = next((pt for pt in msg.walk() if pt.get_content_type() == "text/calendar"), None)
+        if cal is not None and "METHOD:REPLY" in (cal.get_content() or "").upper():
+            meta["message_class"] = "IPM.Schedule.Meeting.Resp"
         _, files_dir = message_paths(ws, meta)
         body_part = msg.get_body(preferencelist=("plain", "html"))
         body = body_part.get_content() if body_part else ""
@@ -94,10 +99,15 @@ def import_eml(ws: Workspace, paths: list[str], force: bool = False, log=print) 
                 rec["content_id"] = cid
             atts.append(rec)
         meta["attachments"] = atts
+        if ws.cfg("outlook.skip_meeting_responses", True) and is_empty_response(ws, meta, body):
+            if files_dir.exists():
+                shutil.rmtree(files_dir)
+            skipped += 1
+            continue
         write_message(ws, meta, body)
         index.upsert(meta)
         n += 1
     index.save()
-    ws.record_run("import_eml", imported=n)
-    log(f"Imported {n} message(s).")
+    ws.record_run("import_eml", imported=n, skipped_responses=skipped)
+    log(f"Imported {n} message(s)." + (f" Skipped {skipped} meeting response(s) without a comment." if skipped else ""))
     return n

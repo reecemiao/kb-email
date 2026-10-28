@@ -28,6 +28,7 @@ from kbmail.workspace import OTHERS, Workspace
 LABELS = "state/labels.json"
 BATCHES = "state/label_batches.json"
 WORKDIR = "work/labeling"
+NOISE = "noise"  # label source for mail with no content of its own (kbmail.noise)
 
 
 def load_labels(ws: Workspace) -> dict:
@@ -56,6 +57,24 @@ def set_label(
     }
 
 
+def mark_empty_responses(ws: Workspace, labels: dict, records: list[dict]) -> int:
+    """Label meeting responses without a comment `others` (exported before they were skipped)."""
+    from kbmail.noise import is_empty_response, is_meeting_response
+
+    n = 0
+    for rec in records:
+        if rec["id"] in labels or rec.get("kind") == "chat":
+            continue
+        try:
+            meta, body = read_message(ws, rec)  # message_class is in the file (older indexes lack it)
+        except FileNotFoundError:
+            continue
+        if is_meeting_response(meta) and is_empty_response(ws, meta, body):
+            set_label(labels, rec["id"], [OTHERS], "auto", NOISE, None, "meeting response without a comment")
+            n += 1
+    return n
+
+
 # ---------------------------------------------------------------- batches for Copilot
 
 
@@ -77,6 +96,10 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
     state = ws.load_json(BATCHES, {"next": 1, "open": {}})
     in_open = {mid for b in state["open"].values() for mid in b["ids"]}
     pending = [r for r in message_index(ws).all() if r["id"] not in labels and r["id"] not in in_open]
+    if ws.cfg("outlook.skip_meeting_responses", True) and (n := mark_empty_responses(ws, labels, pending)):
+        save_labels(ws, labels)
+        pending = [r for r in pending if r["id"] not in labels]
+        log(f"Labeled {n} meeting response(s) without a comment `{OTHERS}` (not sent to Copilot).")
     if limit:
         pending = pending[:limit]
     if not pending:

@@ -56,6 +56,7 @@ def eligible_threads(ws: Workspace) -> dict[str, dict]:
     labels = load_labels(ws)
     out = {}
     for tid, msgs in threads(ws).items():
+        msgs = [m for m in msgs if labels.get(m["id"], {}).get("source") != "noise"]  # empty meeting responses
         areas = _thread_areas(ws, msgs, labels)
         if areas:
             out[tid] = {"messages": msgs, "areas": areas}

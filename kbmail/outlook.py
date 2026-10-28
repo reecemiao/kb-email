@@ -21,6 +21,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from kbmail.noise import is_empty_response
 from kbmail.records import calendar_index, message_id_for, message_index, message_paths, write_message
 from kbmail.textutil import dump_frontmatter, now_iso, parse_dt, short_hash, slugify
 from kbmail.workspace import Workspace
@@ -221,7 +222,9 @@ def _save_attachments(ws: Workspace, item, files_dir: Path, html: str, max_bytes
     return atts
 
 
-def export_item(ws: Workspace, item, folder, is_sent: bool, index, force: bool) -> str | None:
+def export_item(
+    ws: Workspace, item, folder, is_sent: bool, index, force: bool, stats: dict | None = None
+) -> str | None:
     """Export one mail/meeting item. Returns the message id, or None when skipped."""
     cls = _safe(lambda: item.Class, 0)
     if cls != OL_MAIL and cls not in OL_MEETING_CLASSES:
@@ -262,6 +265,10 @@ def export_item(ws: Workspace, item, folder, is_sent: bool, index, force: bool) 
     }
     o = ws.config["outlook"]
     body = _safe(lambda: item.Body, "") or ""
+    if o.get("skip_meeting_responses", True) and is_empty_response(ws, meta, body):
+        if stats is not None:
+            stats["skipped_responses"] = stats.get("skipped_responses", 0) + 1
+        return None
     if len(body) > o["max_body_chars"]:
         body = body[: o["max_body_chars"]] + "\n\n[… truncated by kbmail]"
     _, files_dir = message_paths(ws, meta)
@@ -297,7 +304,7 @@ def export_mail(
     state = ws.load_json(EXPORT_STATE, {"folders": {}})
     index = message_index(ws)
     now = datetime.now().astimezone()
-    summary = {"exported": 0, "skipped_existing": 0, "folders": {}}
+    summary = {"exported": 0, "skipped_existing": 0, "skipped_responses": 0, "folders": {}}
     for folder, is_sent in resolve_folders(
         ns, folders or o["folders"], include_subfolders, all_folders, o.get("extra_folders") or []
     ):
@@ -314,12 +321,13 @@ def export_mail(
         item = items.GetFirst()
         newest = parse_dt(fstate.get("last_received")) if fstate.get("last_received") else None
         n_new = n_seen = 0
+        skipped_before = summary["skipped_responses"]
         while item is not None:
             rt = com_dt(_safe(lambda: item.ReceivedTime))
             if rt is not None and rt < since:
                 break
             n_seen += 1
-            mid = export_item(ws, item, folder, is_sent, index, force)
+            mid = export_item(ws, item, folder, is_sent, index, force, summary)
             if mid:
                 n_new += 1
             if rt and (newest is None or rt > newest):
@@ -334,12 +342,14 @@ def export_mail(
             "since_used": since.isoformat(),
         }
         summary["folders"][fpath] = {"new": n_new, "seen": n_seen, "since": since.isoformat()}
+        n_resp = summary["skipped_responses"] - skipped_before
         summary["exported"] += n_new
-        summary["skipped_existing"] += n_seen - n_new
-        log(f"{fpath}: {n_new} new / {n_seen} in window (since {since:%Y-%m-%d %H:%M})")
+        summary["skipped_existing"] += n_seen - n_new - n_resp
+        resp = f", {n_resp} meeting response(s) without a comment skipped" if n_resp else ""
+        log(f"{fpath}: {n_new} new / {n_seen} in window (since {since:%Y-%m-%d %H:%M}){resp}")
     index.save()
     ws.save_json(EXPORT_STATE, state)
-    ws.record_run("export_mail", exported=summary["exported"])
+    ws.record_run("export_mail", exported=summary["exported"], skipped_responses=summary["skipped_responses"])
     return summary
 
 
@@ -369,15 +379,19 @@ def _attendees(item) -> list[dict]:
     out = []
     recips = _safe(lambda: item.Recipients)
     kinds = {1: "required", 2: "optional", 3: "resource"}
+    # Recipient.MeetingResponseStatus: what each attendee answered (meetings I organize).
+    responses = {1: "organizer", 2: "tentative", 3: "accepted", 4: "declined"}
     for i in range(1, _safe(lambda: recips.Count, 0) + 1):
         r = recips.Item(i)
-        out.append(
-            {
-                "name": _safe(lambda: r.Name, ""),
-                "email": recipient_smtp(r),
-                "type": kinds.get(_safe(lambda: r.Type, 1), "required"),
-            }
-        )
+        a = {
+            "name": _safe(lambda: r.Name, ""),
+            "email": recipient_smtp(r),
+            "type": kinds.get(_safe(lambda: r.Type, 1), "required"),
+        }
+        resp = responses.get(_safe(lambda: r.MeetingResponseStatus, 0))
+        if resp:
+            a["response"] = resp
+        out.append(a)
     return out
 
 

@@ -111,6 +111,16 @@ README.md                   workspace guide, incl. version control (what is trac
 * Defaults: Inbox + Sent Items, no subfolders. `--include-subfolders`, `--all-folders` (every mail
   folder in the default store except Deleted/Junk/Outbox/Drafts/Sync Issues), `--folder` (repeatable;
   `inbox`, `sent`, `Inbox/Sub/Folder`, or `\\Store Name\Folder`), `outlook.extra_folders` for archives.
+* Meeting responses (`IPM.Schedule.Meeting.Resp.*`, "X forwarded your meeting"; in `.eml` files a
+  `text/calendar` part with `METHOD:REPLY`) are not exported when they carry no comment. Not a
+  comment: the copied invitation (`-----Original Appointment-----`), lines matching
+  `outlook.boilerplate_lines` (classification labels such as `INTERNAL`), and a bare "Thanks" / "OK" /
+  "ありがとうございます". A response with a real comment ("Declined - on leave, please send the notes")
+  is exported like any mail. Who accepted or declined is kept in the calendar export: each attendee
+  has a `response` (accepted / declined / tentative / organizer) for meetings you organize.
+  Responses exported earlier are labeled `others` (source `noise`) by `kbmail label prepare`
+  instead of going to Copilot, and they are left out of KB threads. Turn it off with
+  `outlook.skip_meeting_responses: false`.
 
 ## Labeling and rules
 

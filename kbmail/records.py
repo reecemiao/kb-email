@@ -45,6 +45,7 @@ _INDEX_KEYS = (
     "store_id",
     "importance",
     "categories",
+    "message_class",
 )
 
 

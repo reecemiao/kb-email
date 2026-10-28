@@ -224,3 +224,66 @@ def test_com_dt_reinterprets_wall_clock():
     out = outlook.com_dt(v)
     assert (out.hour, out.minute) == (9, 30) and out.tzinfo is not None
     assert outlook.com_dt(datetime(4501, 1, 1)) is None
+
+
+def test_meeting_responses_without_comment_are_skipped(ws, monkeypatch):
+    now = _now()
+    empty = Mail(
+        "Accepted: Weekly",
+        now - timedelta(hours=3),
+        ("Sarah", "sarah@contoso.com"),
+        [("Taro", "taro@contoso.com")],
+        "\r\nINTERNAL\r\n",
+        "<r1@x>",
+        conv="weekly",
+    )
+    empty.Class, empty.MessageClass = 56, "IPM.Schedule.Meeting.Resp.Pos"
+    thanks = Mail(
+        "承諾: Weekly",
+        now - timedelta(hours=2),
+        ("Ken", "ken@x.com"),
+        [("Taro", "taro@contoso.com")],
+        "ありがとうございます。\n\n-----Original Appointment-----\nFrom: Taro\nWhen: Monday\nAgenda",
+        "<r2@x>",
+        conv="weekly",
+    )
+    thanks.Class, thanks.MessageClass = 56, "IPM.Schedule.Meeting.Resp.Pos"
+    declined = Mail(
+        "Declined: Weekly",
+        now - timedelta(hours=1),
+        ("Bob", "bob@contoso.com"),
+        [("Taro", "taro@contoso.com")],
+        "On leave this week, please send me the notes.\nINTERNAL",
+        "<r3@x>",
+        conv="weekly",
+    )
+    declined.Class, declined.MessageClass = 55, "IPM.Schedule.Meeting.Resp.Neg"
+    appt = Appt("Weekly", now + timedelta(days=1), [("Sarah", "sarah@contoso.com"), ("Bob", "bob@contoso.com")])
+    appt.Recipients._items[0].MeetingResponseStatus = 3
+    appt.Recipients._items[1].MeetingResponseStatus = 4
+    ns = NS(
+        Folder("Inbox", Items([empty, thanks, declined])),
+        Folder("Sent Items", Items([])),
+        Folder("Calendar", Items([appt])),
+    )
+    monkeypatch.setattr(outlook, "connect", lambda: ns)
+    s = outlook.export_mail(ws, days=30, log=quiet)
+    assert s["exported"] == 1 and s["skipped_responses"] == 2
+    (rec,) = message_index(ws).all()
+    assert rec["subject"] == "Declined: Weekly"  # it has a comment: kept
+    outlook.export_calendar(ws, days=30, log=quiet)
+    att = {a["email"]: a.get("response") for a in calendar_index(ws).all()[0]["attendees"]}
+    assert att == {"sarah@contoso.com": "accepted", "bob@contoso.com": "declined"}
+
+    # Responses exported before (setting off) are labeled `others` instead of going to Copilot.
+    ws.config["outlook"]["skip_meeting_responses"] = False
+    assert outlook.export_mail(ws, days=30, log=quiet)["exported"] == 2
+    ws.config["outlook"]["skip_meeting_responses"] = True
+    from kbmail.labels import load_labels, prepare_batches
+
+    prepare_batches(ws, log=quiet)
+    labels = load_labels(ws)
+    noise = [m for m, v in labels.items() if v["source"] == "noise"]
+    assert len(noise) == 2 and all(labels[m]["labels"] == ["others"] for m in noise)
+    batch = ws.path("work/labeling/batch_001.md").read_text(encoding="utf-8")
+    assert "Declined: Weekly" in batch and "Accepted: Weekly" not in batch

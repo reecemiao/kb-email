@@ -35,8 +35,10 @@ flowchart LR
 
 ## Install (Windows, classic Outlook)
 
-Uses [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv`). uv also installs a suitable
-Python if you don't have one.
+Uses [uv](https://docs.astral.sh/uv/) **0.12.13 or newer** (`winget install astral-sh.uv`; check with
+`uv --version`). uv also installs a suitable Python if you don't have one. Older uv versions build the
+`kbmail.exe` launcher by editing an `.exe` in `%TEMP%`, which corporate security software often blocks
+(see [Troubleshooting](#troubleshooting-windows-install)).
 
 ```powershell
 git clone https://github.com/reecemiao/kb-email
@@ -61,6 +63,40 @@ Version the workspace in a *private* repo if you like; that also gives the wiki 
 
 On macOS/Linux, or for testing, `kbmail import-eml <folder>` imports saved `.eml` files instead of
 exporting from Outlook. Everything else works the same.
+
+### Troubleshooting (Windows install)
+
+**`Failed to update Windows PE resources: …\Temp\…\uv-trampoline-….exe` / `Access is denied`**
+
+The `kbmail` package itself built fine. The failure is uv creating the `kbmail.exe` launcher.
+Up to 0.12.12, uv wrote a launcher copy to `%TEMP%` and edited its resources there, which endpoint
+security commonly blocks. From 0.12.13 on, uv builds the launcher in memory instead.
+
+1. Update uv, using the same tool you installed it with, and retry:
+   ```powershell
+   uv self update                 # standalone installer
+   winget upgrade astral-sh.uv    # winget
+   pip install -U uv              # pip / pipx (pipx upgrade uv)
+   uv --version                   # 0.12.13 or newer
+   uv tool install -e ".[teams]" --reinstall
+   ```
+2. If writing `.exe` files under `%APPDATA%` is blocked as well, install with plain pip into a venv,
+   then make `kbmail` callable through a `.cmd` shim. A `.cmd` file is a text script, not an
+   executable, so those rules don't apply to it. The workspace hook and skills call `kbmail`, so it
+   must be on PATH:
+   ```powershell
+   py -3.12 -m venv C:\PYTHON\kbmail-venv      # or: uv venv --seed C:\PYTHON\kbmail-venv
+   C:\PYTHON\kbmail-venv\Scripts\python -m pip install -e ".[teams]"
+   # kbmail.cmd in a folder on PATH (uv tool update-shell puts %USERPROFILE%\.local\bin on PATH):
+   New-Item -ItemType Directory -Force "$env:USERPROFILE\.local\bin" | Out-Null
+   Set-Content "$env:USERPROFILE\.local\bin\kbmail.cmd" '@"C:\PYTHON\kbmail-venv\Scripts\python.exe" -m kbmail %*'
+   ```
+   `python -m kbmail …` always works without any launcher.
+3. If it still fails, ask IT to allow uv/pip to write launchers in your user profile. Name the
+   folders: `%APPDATA%\uv\tools` and `%USERPROFILE%\.local\bin`, or the venv's `Scripts` folder.
+
+**`build_system.requires = ["uv-build…"]` does not contain the current uv version**: fixed in
+`pyproject.toml`. Run `git pull`.
 
 ## Settings: `kbmail.yaml` and `.env`
 

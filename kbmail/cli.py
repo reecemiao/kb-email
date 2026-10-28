@@ -96,6 +96,14 @@ def cmd_sync(args):
     kb.convert(ws)
     wiki.raw_import(ws)
     wiki.write_queue(ws)
+    if ws.cfg("directory.enabled"):
+        from kbmail import directory
+
+        try:  # never prompts here: needs directory.auth kerberos or KBMAIL_DIRECTORY_PASSWORD
+            people.build(ws, log=lambda *a: None)  # fresh contact list to look up
+            directory.sync(ws, interactive=False)
+        except Exception as e:
+            print(f"(directory lookup skipped: {e})")
     people.build(ws)
     assist.triage(ws)
     ws.record_run("sync")
@@ -265,6 +273,40 @@ def cmd_wiki(args):
             print(f"{len(g['nodes'])} node(s), {len(g['edges'])} edge(s) -> state/wiki_graph.json")
     elif args.action == "status":
         print(wiki.status(ws))
+
+
+def cmd_directory(args):
+    from kbmail import directory, people
+
+    ws = _ws(args)
+    try:
+        if args.action == "lookup":
+            if not args.email:
+                print("give an e-mail address", file=sys.stderr)
+                return 2
+            conn = directory.connect(ws)
+            try:
+                d = directory.Directory(ws, conn)
+                for email in args.email:
+                    print(directory.as_json({"email": email, **d.lookup(email)}))
+            finally:
+                conn.unbind()
+        elif args.action == "test":
+            conn = directory.connect(ws)
+            try:
+                print(f"Bound to {ws.cfg('directory.server')} as {conn.extend.standard.who_am_i() or '(unknown)'}")
+                d = directory.Directory(ws, conn)
+                for email in sorted(ws.me_emails)[:1]:
+                    print(directory.as_json({"email": email, **d.lookup(email)}))
+            finally:
+                conn.unbind()
+        else:
+            people.build(ws, log=lambda *a: None)
+            directory.sync(ws, limit=args.limit, refresh=args.refresh)
+            people.build(ws)
+    except directory.DirectoryError as e:
+        print(f"directory: {e}", file=sys.stderr)
+        return 1
 
 
 def cmd_people(args):
@@ -509,6 +551,13 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("people", help="relationship statistics -> work/people/PEOPLE_DIGEST.md")
     s.add_argument("action", choices=["build"], nargs="?", default="build")
     s.set_defaults(func=cmd_people)
+
+    s = sub.add_parser("directory", help="corporate directory (LDAP/AD): test | lookup <email> | sync people")
+    s.add_argument("action", choices=["test", "lookup", "sync"])
+    s.add_argument("email", nargs="*", help="(lookup) e-mail address(es)")
+    s.add_argument("--limit", type=int, help="(sync) max lookups this run (default: directory.max_lookups)")
+    s.add_argument("--refresh", action="store_true", help="(sync) ignore the cache")
+    s.set_defaults(func=cmd_directory)
 
     s = sub.add_parser("triage", help="what needs a reply / follow-up -> work/triage/TRIAGE.md")
     s.add_argument("--days", type=int, help="look-back window (default: triage.days)")

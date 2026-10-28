@@ -34,6 +34,8 @@ CONFIG_NAME = "kbmail.yaml"
 OTHERS = "others"
 ENV_PREFIX = "KBMAIL_"
 ENV_WORKSPACE = "KBMAIL_WORKSPACE"
+# Secrets are read from the environment only; they are not settings and never appear in .env.example.
+ENV_SECRETS = {"KBMAIL_DIRECTORY_PASSWORD"}
 ENV_FILE = ".env"
 
 DEFAULT_CONFIG: dict = {
@@ -72,6 +74,41 @@ DEFAULT_CONFIG: dict = {
         "search_limit": 10,
         "search_raw": False,
         "graph_depth": 1,
+    },
+    "directory": {
+        "enabled": False,
+        "server": "",
+        "port": 636,
+        "use_ssl": True,
+        "validate_cert": True,
+        "ca_certs_file": "",
+        "auth": "ntlm",
+        "user": "",
+        "search_base": "",
+        "scope": "subtree",
+        "email_filter": "(|(mail={email})(proxyAddresses=smtp:{email}))",
+        "id_filter": "(|(employeeID={id})(cn={id}))",
+        "fields": {
+            "name": ["displayName"],
+            "email": ["mail"],
+            "title": ["title"],
+            "department": ["department"],
+            "company": ["company"],
+            "office": ["physicalDeliveryOfficeName"],
+            "country": ["co"],
+            "employee_id": ["employeeID"],
+            "employee_type": ["employeeType"],
+        },
+        "relations": {
+            "manager": {"dn": ["manager"], "id": [], "name": []},
+            "assistant": {"dn": ["assistant"], "id": [], "name": []},
+        },
+        "digest_fields": ["title", "department", "company", "office", "country"],
+        "chain_depth": 3,
+        "cache_days": 30,
+        "max_lookups": 300,
+        "connect_timeout": 10,
+        "receive_timeout": 30,
     },
     "teams": {
         "via": "powershell",
@@ -131,6 +168,25 @@ CONFIG_HELP: dict[str, str] = {
     "wiki.search_limit": "results for `kbmail wiki search` (-n)",
     "wiki.search_raw": "include raw/ sources in wiki search (--[no-]raw)",
     "wiki.graph_depth": "neighbourhood depth for `kbmail wiki graph` (--depth)",
+    "directory.enabled": "look people up in the corporate directory (LDAP/AD) during `kbmail sync`",
+    "directory.server": "directory host name, e.g. ldap.example.com (LDAPS)",
+    "directory.port": "636 for LDAPS, 3269 for an AD global catalog over SSL",
+    "directory.use_ssl": "connect with TLS (LDAPS)",
+    "directory.validate_cert": "verify the server certificate",
+    "directory.ca_certs_file": "PEM truststore with your company's CA certificates",
+    "directory.auth": "ntlm (DOMAIN\\user + password) | kerberos (Windows sign-in, no password) | simple | anonymous",
+    "directory.user": "ntlm/simple user (empty = %USERDOMAIN%\\%USERNAME%); the password is prompted for, "
+    "or read from the KBMAIL_DIRECTORY_PASSWORD environment variable",
+    "directory.search_base": "where people live, e.g. OU=People,DC=example,DC=com",
+    "directory.scope": "subtree | level (one level below search_base) | base",
+    "directory.email_filter": "LDAP filter to find a person by e-mail ({email} is escaped)",
+    "directory.id_filter": "LDAP filter to find a person by id, for id-based relations ({id} is escaped)",
+    "directory.digest_fields": "directory fields shown in the people digest (keep phone numbers out of the wiki)",
+    "directory.chain_depth": "how many manager levels above you to resolve",
+    "directory.cache_days": "re-fetch a person after this many days",
+    "directory.max_lookups": "max directory lookups per run",
+    "directory.connect_timeout": "seconds",
+    "directory.receive_timeout": "seconds",
     "teams.via": "powershell (no app registration) | graph (own Entra app) | outlook (teams export --via)",
     "teams.import_dir": "where scripts/teams-export.ps1 saves Graph JSON for `kbmail teams import`",
     "teams.tenant": "Entra tenant id or domain",
@@ -237,7 +293,7 @@ def env_overrides(root: Path | None = None) -> tuple[dict, dict[str, str], list[
     sources: dict[str, str] = {}
     warnings = []
     for var, (raw, src) in sorted(read_env(root).items()):
-        if var == ENV_WORKSPACE or not raw.strip():
+        if var == ENV_WORKSPACE or var in ENV_SECRETS or not raw.strip():
             continue  # an empty value (KEY=) means "not set"
         path = known.get(var) or sections.get(var)
         if path is None:

@@ -153,6 +153,7 @@ def build(ws: Workspace, log=print) -> dict:
             "last": p["last"],
             "override": ov["people"].get(e, {}),
         }
+    _add_directory(ws, out, me)
     prev = ws.load_json(STATE, {}).get("people", {})
     for e, d in out.items():
         old = prev.get(e)
@@ -164,8 +165,61 @@ def build(ws: Workspace, log=print) -> dict:
     return out
 
 
+def _add_directory(ws: Workspace, out: dict, me: set[str]) -> None:
+    """Attach directory facts (kbmail directory sync) and add key org contacts without recent mail."""
+    from kbmail import directory
+
+    state = directory.load(ws)
+    if not state.get("people"):
+        return
+    key_people = set(state.get("chain") or [])
+    for email in state["people"]:
+        if directory.org_relation(email, state, me) in ("direct-report", "manager"):
+            key_people.add(email)
+    for email in key_people - set(out) - me:
+        rec = state["people"].get(email) or {}
+        if rec.get("found"):
+            out[email] = {
+                "email": email,
+                "name": rec["fields"].get("name", email),
+                "domain": email_domain(email),
+                "internal": True,
+                "from_them": 0,
+                "to_them": 0,
+                "cc_them": 0,
+                "they_cc_me": 0,
+                "meetings": 0,
+                "score": 0,
+                "areas": {},
+                "top_co": [],
+                "median_reply_hours": None,
+                "first": None,
+                "last": None,
+                "override": {},
+                "no_recent_mail": True,
+            }
+    for email, d in out.items():
+        info = directory.summary(ws, email, state, me)
+        if info:
+            d["directory"] = info
+
+
+def _org_cell(d: dict) -> str:
+    info = d.get("directory") or {}
+    if not info:
+        return ""
+    parts = [info.get("org_relation", "")]
+    parts += [info[k] for k in ("title", "department") if info.get(k)]
+    mgr = (info.get("relations") or {}).get("manager")
+    if mgr:
+        parts.append(f"reports to {mgr}")
+    return "; ".join(p for p in parts if p).replace("|", "/")
+
+
 def _write_digest(ws: Workspace, people: dict, me: set[str]) -> None:
-    top = sorted(people.values(), key=lambda d: -d["score"])[: ws.cfg("people.top_n", 80)]
+    ranked = sorted(people.values(), key=lambda d: -d["score"])
+    top = ranked[: ws.cfg("people.top_n", 80)]
+    top += [d for d in ranked if d.get("no_recent_mail") and d not in top]
     lines = [
         f"# People digest ({now_iso()})",
         "",
@@ -174,11 +228,13 @@ def _write_digest(ws: Workspace, people: dict, me: set[str]) -> None:
         "",
         "Columns: from_them = mails they sent you; to_them / cc_them = mails you sent them as To / CC; "
         "they_cc_me = they wrote someone else and CC'd you; meetings = shared calendar events; "
-        "reply_h = your median reply time to them (hours).",
+        "reply_h = your median reply time to them (hours). org = from the corporate directory "
+        "(`kbmail directory sync`): relation to you, title, department, manager; authoritative for "
+        "reporting lines.",
         "",
         "| person | domain | int | from_them | to_them | cc_them | they_cc_me | meetings | reply_h | areas "
-        "| often with | changed | override |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| often with | org | changed | override |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for d in top:
         ov = ", ".join(f"{k}={v}" for k, v in d["override"].items() if k != "aliases")
@@ -187,7 +243,7 @@ def _write_digest(ws: Workspace, people: dict, me: set[str]) -> None:
             f"{d['to_them']} | {d['cc_them']} | {d['they_cc_me']} | {d['meetings']} | "
             f"{d['median_reply_hours'] or ''} | "
             f"{', '.join(f'{a}:{n}' for a, n in d['areas'].items())} | {', '.join(d['top_co'][:3])} | "
-            f"{'*' if d['changed'] else ''} | {ov} |"
+            f"{_org_cell(d)} | {'*' if d['changed'] else ''} | {ov} |"
         )
     p = ws.path(DIGEST)
     p.parent.mkdir(parents=True, exist_ok=True)

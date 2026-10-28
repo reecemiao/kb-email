@@ -18,6 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 teams = ["msal>=1.28", "requests>=2.31"]
+directory = [
+    "ldap3>=2.9",
+    "pycryptodome>=3.20",
+    "winkerberos>=0.12 ; sys_platform == 'win32'",
+]
 
 [project.scripts]
 kbmail = "kbmail.cli:main"

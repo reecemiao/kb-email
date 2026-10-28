@@ -170,7 +170,7 @@ print a warning, and invalid values stop the command with the variable's name.
 | 8 | Answer what Copilot didn't understand; give links to documentation | you | edit `review/questions.yaml` (or `kbmail questions answer`), then `kbmail questions ingest` (fetches URLs into `raw/web/`). Drop your own documents into `raw/inbox/` → `kbmail raw import` |
 | 9 | Build the wiki (LLM Wiki v2: tiers, confidence, supersession, typed graph) | Copilot | `kbmail wiki queue` → `/kb-wiki-ingest` → `kbmail wiki lint` → `/kb-wiki-lint` |
 | 10 | Draft mail on a topic / reply to a message; get suggestions of what to send or answer | Copilot | `/kb-style` once; then `/kb-draft`, `/kb-suggest` (uses `kbmail triage`), `kbmail draft-outlook drafts/x.md` puts a draft in Outlook (never sends) |
-| 11 | Infer people and relationships | kbmail + Copilot | `kbmail people build` → `/kb-people` (corrections in `config/people.yaml`) |
+| 11 | Infer people and relationships. Optional: titles, departments and reporting lines from the corporate directory (LDAP/AD, [docs/directory.md](docs/directory.md)) | kbmail + Copilot | `kbmail directory sync` (optional) → `kbmail people build` → `/kb-people` (corrections in `config/people.yaml`) |
 
 `kbmail status` shows at any time what is done and the next action. `/kb-ask` answers questions from
 the wiki with citations and can file good answers back into it.
@@ -229,6 +229,7 @@ See [docs/teams.md](docs/teams.md) for how to pick a route and what to do if the
 * [docs/architecture.md](docs/architecture.md): workspace layout, file formats, state files, design decisions
 * [docs/copilot.md](docs/copilot.md): VS Code / Copilot setup: skills, KB Librarian agent, hook, vision on/off, automation
 * [docs/teams.md](docs/teams.md): Teams feasibility and setup
+* [docs/directory.md](docs/directory.md): corporate directory (LDAP/AD) lookups for people and reporting lines
 
 ## Development
 

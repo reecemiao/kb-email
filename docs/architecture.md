@@ -52,6 +52,7 @@ state/                      kbmail-owned state (JSON)
   kb_convert.json           thread -> signature, raw target, images, formatted?
   images.json               image registry (dedup by hash, status, description)
   people.json               relationship statistics
+  directory.json            corporate directory cache (titles, managers; personal data, git-ignored)
   wiki_manifest.json        raw file -> sha256 at ingest
   wiki_snapshots/           ingested copy of each raw file (for diffs)
   wiki_graph.json           typed graph (front-matter relations + wikilinks)

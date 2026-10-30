@@ -1,1 +1,257 @@
-# kb-email
+# kb-email (`kbmail`)
+
+Turn your Outlook mailbox (and calendar, and optionally Teams chats) into a **reviewed, area-labeled,
+continuously updated knowledge base** that GitHub Copilot in VS Code can use to answer questions,
+suggest which emails need attention, and draft replies in your own style.
+
+* **Python (`kbmail` CLI)** does everything deterministic: export via pywin32, de-duplication and
+  delta tracking, rule-based labeling, markitdown conversion, redaction, queues, wiki bookkeeping
+  (diffs, lint, confidence decay, search, graph), relationship statistics.
+* **Copilot** (latest VS Code) does the parts that need judgement, through
+  [agent skills](https://agentskills.io) that also work as `/` commands (`/kb-label`, `/kb-rules`,
+  `/kb-select`, `/kb-format`, `/kb-wiki-ingest`, `/kb-draft`, ...). Each one reads a file kbmail
+  prepared and writes a result file in a fixed format, which kbmail validates and imports. A **KB
+  Librarian** custom agent ties them together, and a session-start hook gives it the current state.
+* **You** confirm labels, describe images when Copilot vision is off, and answer open questions.
+
+Nothing needs an API key: the only LLM is the Copilot you already have in VS Code.
+
+```mermaid
+flowchart LR
+  OL["Outlook (pywin32)"] -->|kbmail export| D["data/messages + state/index.jsonl"]
+  TM["Teams (Graph)"] -->|kbmail teams export| D
+  D -->|rules.yaml| L{labels}
+  D -->|/kb-label| L
+  L -->|kbmail review| C[confirmed labels]
+  C -->|/kb-rules| R["config/rules.yaml + rules_journal.md"]
+  R -.next run.-> L
+  C -->|/kb-select| S[selected threads]
+  S -->|"kbmail kb convert (markitdown, images, redaction)"| W["work/convert"]
+  W -->|/kb-format| RAW["raw/"]
+  Q["review/questions.yaml, review/images"] --> RAW
+  RAW -->|"kbmail wiki queue, /kb-wiki-ingest"| WIKI["wiki/ (LLM Wiki v2)"]
+  WIKI --> DR["/kb-draft, /kb-suggest, /kb-ask"]
+```
+
+## Install (Windows, classic Outlook)
+
+Uses [uv](https://docs.astral.sh/uv/) **0.12.13 or newer** (`winget install astral-sh.uv`; check with
+`uv --version`). uv also installs a suitable Python if you don't have one. Older uv versions build the
+`kbmail.exe` launcher by editing an `.exe` in `%TEMP%`, which corporate security software often blocks
+(see [Troubleshooting](#troubleshooting-windows-install)).
+
+```powershell
+git clone https://github.com/reecemiao/kb-email
+cd kb-email
+uv tool install -e ".[teams]"   # puts `kbmail` on PATH; drop [teams] if you don't need the Teams exporter
+kbmail init C:\kb               # creates your private workspace (config, skills, agent, wiki skeleton)
+```
+
+`uv tool install -e` keeps the install linked to the clone, so `git pull` updates it (rerun the command
+when dependencies change). Then run `kbmail init C:\kb --upgrade` to refresh the workspace's skills,
+agent, hook and schema (your config, `.env` and wiki pages are never overwritten).
+
+Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords, `copilot.vision`), then open
+`C:\kb` in VS Code. In the Chat view, pick the **KB Librarian** agent and type `/kb-start`; Copilot
+walks you through the first run.
+
+Requirements: Python 3.12+, classic Outlook desktop (the new WebView-based Outlook has no COM API),
+current VS Code with GitHub Copilot. Skills, the custom agent and `AGENTS.md` are picked up
+automatically, and the hook needs `kbmail` on PATH. The workspace is separate from this repo, so your
+mail never ends up in the tool's git history.
+Version the workspace in a *private* repo if you like; that also gives the wiki a full audit history.
+
+On macOS/Linux, or for testing, `kbmail import-eml <folder>` imports saved `.eml` files instead of
+exporting from Outlook. Everything else works the same.
+
+### Troubleshooting (Windows install)
+
+**`Failed to update Windows PE resources: …\Temp\…\uv-trampoline-….exe` / `Access is denied`**
+
+The `kbmail` package itself built fine. The failure is uv creating the `kbmail.exe` launcher.
+Up to 0.12.12, uv wrote a launcher copy to `%TEMP%` and edited its resources there, which endpoint
+security commonly blocks. From 0.12.13 on, uv builds the launcher in memory instead.
+
+1. Update uv, using the same tool you installed it with, and retry:
+   ```powershell
+   uv self update                 # standalone installer
+   winget upgrade astral-sh.uv    # winget
+   pip install -U uv              # pip / pipx (pipx upgrade uv)
+   uv --version                   # 0.12.13 or newer
+   uv tool install -e ".[teams]" --reinstall
+   ```
+2. If writing `.exe` files under `%APPDATA%` is blocked as well, install with plain pip into a venv,
+   then make `kbmail` callable through a `.cmd` shim. A `.cmd` file is a text script, not an
+   executable, so those rules don't apply to it. The workspace hook and skills call `kbmail`, so it
+   must be on PATH:
+   ```powershell
+   py -3.12 -m venv C:\PYTHON\kbmail-venv      # or: uv venv --seed C:\PYTHON\kbmail-venv
+   C:\PYTHON\kbmail-venv\Scripts\python -m pip install -e ".[teams]"
+   # kbmail.cmd in a folder on PATH (uv tool update-shell puts %USERPROFILE%\.local\bin on PATH):
+   New-Item -ItemType Directory -Force "$env:USERPROFILE\.local\bin" | Out-Null
+   Set-Content "$env:USERPROFILE\.local\bin\kbmail.cmd" '@"C:\PYTHON\kbmail-venv\Scripts\python.exe" -m kbmail %*'
+   ```
+   `python -m kbmail …` always works without any launcher.
+3. If it still fails, ask IT to allow uv/pip to write launchers in your user profile. Name the
+   folders: `%APPDATA%\uv\tools` and `%USERPROFILE%\.local\bin`, or the venv's `Scripts` folder.
+
+**`build_system.requires = ["uv-build…"]` does not contain the current uv version**: fixed in
+`pyproject.toml`. Run `git pull`.
+
+## Version control (GitHub)
+
+The workspace can be its own **private** git repository. You get a reviewable history of every
+change Copilot makes to the wiki, a backup, and a way to move to another machine. `kbmail init`
+writes a `.gitignore` that tracks what you and Copilot authored:
+- `wiki/` and `raw/` (except `raw/inbox/`)
+- `config/`, `kbmail.yaml`, `.env.example`
+- `AGENTS.md`, `.github/`, `.vscode/`, `.githooks/`
+- your answers, image descriptions and Mermaid conversions under `review/`
+- the state that delta runs need on another machine: labels, KB choices, image descriptions,
+  the wiki manifest and snapshots, rules history
+
+The raw mail export (`data/`), generated queues (`work/`), `.env`, the Teams token cache and
+images extracted from mail stay out.
+
+```powershell
+kbmail git setup          # git init + pre-commit check that blocks mail exports, tokens and secrets
+gh repo create <owner>/<name> --private --source . --remote origin
+kbmail git check          # what would be pushed, and any problems
+git add -A; git commit -m "Knowledge base snapshot"; git push -u origin main
+```
+
+The workspace's own `README.md` has the full table of what is tracked and why, the routine, and
+how to restore on another machine.
+
+## Settings: `kbmail.yaml` and `.env`
+
+Every setting has a built-in default, and every CLI option that isn't a one-off action (ids, paths,
+`--force`) reads its default from a setting. You can set them in `kbmail.yaml` or as
+`KBMAIL_<SECTION>__<KEY>` variables in a `.env` file or the environment. Precedence, highest first:
+
+1. command-line flag, e.g. `kbmail export --include-subfolders`
+2. environment variable, e.g. `$env:KBMAIL_OUTLOOK__INCLUDE_SUBFOLDERS = "true"`
+3. `.env` in the current directory
+4. `.env` in the workspace root
+5. `kbmail.yaml`
+6. built-in default
+
+`kbmail init` writes `.env.example` with every setting, its default and a one-line description. It
+also creates an all-commented `.env` (git-ignored in the workspace) that you can edit; just uncomment
+lines. `kbmail init --upgrade` regenerates `.env.example` and never touches `.env`.
+
+```dotenv
+KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.co.jp
+KBMAIL_OUTLOOK__DAYS=60
+KBMAIL_OUTLOOK__FOLDERS=inbox,sent,Inbox/Projects
+KBMAIL_COPILOT__VISION=false
+KBMAIL_REVIEW__ACCEPT_ABOVE=0.95
+KBMAIL_SYNC__TEAMS=true
+KBMAIL_WORKSPACE=C:\kb        # lets you run kbmail from any folder
+```
+
+Values are parsed by the default's type. Booleans take `true`/`false`. Lists are comma-separated
+(`a,b`) or YAML (`[a, b]`). An empty value (`KEY=`) counts as not set. Unknown `KBMAIL_*` names
+print a warning, and invalid values stop the command with the variable's name.
+`kbmail config show [prefix]` prints each effective value, where it came from and its variable name.
+`kbmail config env` prints a fresh template.
+
+## First run, step by step
+
+| # | what | who | command / skill |
+|---|---|---|---|
+| 1 | Export mail + calendar for the last *n* days. Default: Inbox + Sent Items, subfolders skipped | kbmail | `kbmail export --days 30` (`--include-subfolders`, `--all-folders`, `--folder "Inbox/Projects"`, `--no-calendar`) |
+| 2 | Rough labeling into your areas + `others` | Copilot | `kbmail label prepare` → `/kb-label` → `kbmail label import` |
+| 3 | Confirm or correct every label | you | `kbmail review` (Enter = accept, `1,2` = set areas, `v` view, `b` back, `q` quit) or `kbmail review export-csv` / `import-csv` for Excel |
+| 4 | Turn confirmed labels into deterministic rules | Copilot | `kbmail rules prepare` → `/kb-rules` (edits `config/rules.yaml`, iterates with `kbmail rules evaluate`, then `kbmail rules commit`) |
+| 5 | Pick threads with durable knowledge | Copilot | `kbmail kb prepare` → `/kb-select` → `kbmail kb import` |
+| 6 | Convert selected mail + attachments (markitdown), then clean them into `raw/` | kbmail + Copilot | `kbmail kb convert` → `/kb-format` |
+| 7 | Images: vision **off** → you describe them in `review/images/descriptions.yaml` (preview `REVIEW.md`), vision **on** → `/kb-images`. SVGs: kbmail converts draw.io exports and simple box-and-arrow diagrams to Mermaid itself and skips icons; for the rest `/kb-svg` works from a text digest (no vision needed) | you / Copilot | `kbmail images import` (or `kbmail images describe`); `kbmail svg2mermaid <file>` for any SVG |
+| 8 | Answer what Copilot didn't understand; give links to documentation | you | edit `review/questions.yaml` (or `kbmail questions answer`), then `kbmail questions ingest` (fetches URLs into `raw/web/`). Drop your own documents into `raw/inbox/` → `kbmail raw import` |
+| 9 | Build the wiki (LLM Wiki v2: tiers, confidence, supersession, typed graph) | Copilot | `kbmail wiki queue` → `/kb-wiki-ingest` → `kbmail wiki lint` → `/kb-wiki-lint` |
+| 10 | Draft mail on a topic / reply to a message; get suggestions of what to send or answer | Copilot | `/kb-style` once; then `/kb-draft`, `/kb-suggest` (uses `kbmail triage`), `kbmail draft-outlook drafts/x.md` puts a draft in Outlook (never sends) |
+| 11 | Infer people and relationships. Optional: titles, departments and reporting lines from the corporate directory (LDAP/AD, [docs/directory.md](docs/directory.md)) | kbmail + Copilot | `kbmail directory sync` (optional) → `kbmail people build` → `/kb-people` (corrections in `config/people.yaml`) |
+
+`kbmail status` shows at any time what is done and the next action. `/kb-ask` answers questions from
+the wiki with citations and can file good answers back into it.
+
+## Later runs: deltas only
+
+`kbmail sync` (or `/kb-sync` in Copilot, which runs it and then works through the queues):
+
+* **(a) mail export:** each folder keeps a watermark (newest `ReceivedTime`) in
+  `state/export_state.json`. The next export starts at the watermark minus `overlap_hours` and
+  de-duplicates by Internet Message-ID against `state/index.jsonl`. Calendar re-scans from the last
+  run (meetings get edited), and future events are always re-scanned.
+* Rules label new mail first (`status: auto`); only what the rules can't decide goes to `/kb-label`,
+  and only new proposals appear in `kbmail review`. Spot-check rule labels with
+  `kbmail review --source auto`.
+* **(b) rule refresh:** `state/runs.json` records each `rules commit` (time, confirmed-label count,
+  coverage, accuracy). A refresh is due after `rules.refresh_every_days` or
+  `rules.refresh_after_new_confirmed` new confirmations. `kbmail rules prepare` hands Copilot the
+  evaluation, mistakes, mined signals, labels confirmed since last time **and the previous conclusions**
+  from `config/rules_journal.md`. Each committed version is snapshotted in `state/rules_history/`.
+* KB selection works per thread. A thread is re-assessed only when it gets new messages, and
+  conversion only re-runs when the selected messages change. `/kb-format` updates the existing raw file.
+* **(c) wiki:** `state/wiki_manifest.json` stores the sha256 of every raw file at ingest time, and
+  `state/wiki_snapshots/` keeps a copy. `kbmail wiki queue` lists new, changed and deleted raw files;
+  a changed file comes **with a unified diff**, so Copilot integrates only what changed.
+  `kbmail wiki mark` records the ingest (audit trail in `state/wiki_audit.jsonl` + `wiki/log.md`).
+
+Schedule the deterministic part daily with Windows Task Scheduler (Outlook COM needs your logged-in
+session, so choose "Run only when user is logged on"):
+
+```powershell
+schtasks /Create /SC DAILY /ST 08:30 /TN kbmail-sync /TR "cmd /c cd /d C:\kb && %USERPROFILE%\.local\bin\kbmail.exe sync >> state\sync.log 2>&1"
+```
+
+When you next open VS Code, `/kb-sync` picks up the prepared queues.
+
+## Teams
+
+The same pipeline works on Teams chats: each chat-day becomes one record (`source: teams`). No
+access to the Entra ID portal is needed:
+
+- **Graph PowerShell** (default): `scripts/teams-export.ps1` signs in with Microsoft's own Graph
+  PowerShell app (`Install-Module Microsoft.Graph.Authentication -Scope CurrentUser`, no admin).
+  `kbmail teams export` runs it and imports the result, with deltas. Run
+  `.\scripts\teams-export.ps1 -Test` first to see whether your tenant allows it.
+- **No API at all:** "Share to Outlook" for important threads (they arrive as mail),
+  `kbmail teams import-text` for chats copied from the Teams window, and meeting transcripts
+  (`.vtt`/`.docx`) dropped into `raw/inbox/`.
+- **Also available:** Outlook's hidden Teams folder (`kbmail teams probe-outlook`), or your own app
+  registration if IT creates one.
+
+See [docs/teams.md](docs/teams.md) for how to pick a route and what to do if the test fails.
+
+## More
+
+* [docs/architecture.md](docs/architecture.md): workspace layout, file formats, state files, design decisions
+* [docs/copilot.md](docs/copilot.md): VS Code / Copilot setup: skills, KB Librarian agent, hook, vision on/off, automation
+* [docs/teams.md](docs/teams.md): Teams feasibility and setup
+* [docs/directory.md](docs/directory.md): corporate directory (LDAP/AD) lookups for people and reporting lines
+
+## Development
+
+Tooling: [uv](https://docs.astral.sh/uv/) for environments and the lockfile, [ruff](https://docs.astral.sh/ruff/)
+for linting and formatting (config in `pyproject.toml`), [pre-commit](https://pre-commit.com/) to run both
+on every commit.
+
+```bash
+uv sync --all-extras          # .venv with runtime + Teams extras + dev group (pytest, ruff, pre-commit)
+uv run pre-commit install     # hooks for commit (ruff, uv-lock, file hygiene) and push (pytest)
+uv run pytest                 # tests
+uv run ruff check --fix . && uv run ruff format .
+uv run kbmail --help          # run the CLI from the checkout
+```
+
+Add dependencies with `uv add <pkg>` (or `uv add --group dev <pkg>`) so `uv.lock` stays in sync; the
+`uv-lock` hook rejects commits where it isn't.
+
+The tests run the whole pipeline on generated `.eml` files. They write the result files Copilot
+would write, then check export de-duplication, labeling import, interactive review, rule
+validation/evaluation/snapshots, KB selection with questions, markitdown conversion (HTML tables,
+docx, inline images, SVG), redaction, quoted history (forwards keep what they forward, exported
+originals become pointers), image description flow, wiki delta queue with diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 exporter is tested against
+a fake Outlook object model. Real Outlook and the Graph (Teams) calls need Windows and a tenant, so test
+those on your machine.

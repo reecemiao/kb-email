@@ -1,0 +1,81 @@
+[build-system]
+requires = ["uv_build>=0.11.0,<0.14"]
+build-backend = "uv_build"
+
+[project]
+name = "kbmail"
+version = "0.1.0"
+description = "Export Outlook mail/calendar (and Teams chats), label them by area, and grow an LLM wiki knowledge base with GitHub Copilot in VS Code."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = [
+    "PyYAML>=6.0",
+    "markitdown[docx,pptx,xlsx,pdf,outlook]>=0.1.0",
+    "python-dotenv>=1.0",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+teams = ["msal>=1.28", "requests>=2.31"]
+directory = [
+    "ldap3>=2.9",
+    "pycryptodome>=3.20",
+    "winkerberos>=0.12 ; sys_platform == 'win32'",
+]
+
+[project.scripts]
+kbmail = "kbmail.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "python-docx>=1.1",
+    "ruff>=0.15",
+    "pre-commit>=4",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+# Flat layout: the package lives in ./kbmail (templates/ inside it ship as package data).
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["kbmail/templates"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "SIM105",  # contextlib.suppress: try/except reads clearer around COM calls
+    "SIM905",  # "a b c".split() word lists read better than long list literals
+    "RUF001",  # ambiguous unicode characters: full-width ：？ are intentional (Japanese mail)
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `_safe(lambda: item.X)` wraps COM property reads that may raise; the lambda runs immediately.
+"kbmail/outlook.py" = ["B023"]
+"kbmail/teams.py" = ["B023"]
+"tests/**" = ["E731"]  # `quiet = lambda ...` log sinks
+"tests/test_svg2mermaid.py" = ["E731", "E501"]  # SVG/XML fixtures are kept as written
+
+[tool.ruff.format]
+line-ending = "lf"

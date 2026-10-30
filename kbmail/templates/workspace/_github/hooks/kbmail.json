@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "kbmail hook session-start",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

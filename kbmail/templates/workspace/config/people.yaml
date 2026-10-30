@@ -1,0 +1,12 @@
+# Corrections for relationship inference (read by `kbmail people build` and /kb-people).
+#
+# people:
+#   sarah.tanaka@contoso.com:
+#     aliases: [s.tanaka@contoso.co.jp]   # other addresses of the same person
+#     relationship: manager                # wins over anything Copilot infers
+#     role: Head of Platform
+#     notes: Prefers short emails in English
+# ignore:
+#   - noreply@contoso.com
+people: {}
+ignore: []

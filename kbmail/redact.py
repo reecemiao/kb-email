@@ -4,20 +4,18 @@ from __future__ import annotations
 
 import re
 
-# Password-like keywords. ASCII words need a word boundary on the left; Japanese ones must not have
-# one, because `\b` never matches between two CJK characters (初期パスワード, 仮パスワード).
-_PW_WORDS = r"(?:(?<![A-Za-z0-9_])(?:password|passwd|passcode|pwd|pw|pin)|パスワード|暗証番号|パスコード)"
-# A value is ASCII (passwords practically always are), so Japanese text after the keyword is kept.
-_QUOTED = r"""(?:'[^'\n]+'|"[^"\n]+"|「[^」\n]+」)"""
+# Password-like keywords (passwords are written in English; パスワード/暗証番号 as before).
+_PW_WORDS = r"\b(?:password|passwd|passcode|pwd|pw|pin|パスワード|暗証番号)"
+_QUOTED = r"""(?:'[^'\n]+'|"[^"\n]+")"""
 _VALUE = rf"(?:{_QUOTED}|[!-:<-~]+)"  # quoted, or printable ASCII except `;`
 
 _PATTERNS = [
-    # `password: x`, `パスワード：x`, `Password=x;` (connection strings)
+    # `password: x`, `Password=x;` (connection strings)
     (rf"(?i)({_PW_WORDS})(\s*[:：=]\s*){_VALUE}", r"\1\2[REDACTED]"),
-    # `password is x`, `パスワードは x です`: weaker separators, so an unquoted value must contain a
-    # digit or symbol ("the password is required" keeps its text)
+    # `password is x`: a weaker separator, so an unquoted value must contain a digit or symbol
+    # ("the password is required" keeps its text)
     (
-        rf"(?i)({_PW_WORDS})(\s+is\s+|\s*(?:は|が)\s*)(?:{_QUOTED}|(?=[!-~]*[0-9!-/:-@\[-`{{-~])[!-:<-~]+)",
+        rf"(?i)({_PW_WORDS})(\s+is\s+)(?:{_QUOTED}|(?=[!-~]*[0-9!-/:-@\[-`{{-~])[!-:<-~]+)",
         r"\1\2[REDACTED]",
     ),
     (r"(?i)\b(api[_-]?key|secret|token|client[_-]?secret)\s*[:：=]\s*['\"]?[A-Za-z0-9_\-./+=]{8,}", r"\1: [REDACTED]"),

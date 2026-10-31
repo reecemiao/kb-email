@@ -210,14 +210,14 @@ place to add one (e.g. a local sentence-transformers index) if the wiki grows pa
 
 ## Privacy
 
-* Redaction before raw/: passwords and PINs (`password: x`, `Password is x2`, `初期パスワード：x`,
-  `パスワードは x です`, `Password=x;` in connection strings), API keys/tokens (AWS, GitHub, Slack,
+* Redaction before raw/: passwords and PINs (`password: x`, `Password is x2`, `PW: x`,
+  `Password=x;` in connection strings), API keys/tokens (AWS, GitHub, Slack,
   OpenAI-style, Bearer, HTTP Basic), credentials in URLs (`https://user:x@host`), Azure `AccountKey`
   and SAS `sig=`, private keys, card numbers, plus your own `privacy.extra_patterns`. Previews in
   labeling and selection batches are redacted too. A card number must pass the Luhn check, start
   with an issuer prefix, and be written in groups (`4111 1111 1111 1111`) or follow a word such as
   "card" / "カード": a bare run of digits passes the Luhn check one time in ten, and order or
-  tracking numbers are knowledge worth keeping. After "is" / "は", only a value with a digit or
+  tracking numbers are knowledge worth keeping. After "is", only a value with a digit or
   symbol counts as a password, so "the password is required" keeps its text.
 * Copilot instructions forbid sending content to external services and storing non-work personal data.
 * The MSAL token cache (Teams) is git-ignored in the workspace.

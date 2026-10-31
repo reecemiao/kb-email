@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from kbmail.lock import LockBusy, workspace_lock
 from kbmail.workspace import Workspace, WorkspaceError, init_workspace
 
 
@@ -74,22 +75,42 @@ def cmd_sync(args):
     from kbmail.status import print_status
 
     ws = _ws(args)
-    if ws.opt(args.export, "sync.export"):
+    # Steps that talk to Outlook, Teams or the directory may fail (Outlook closed, token expired, VPN
+    # down). The rest still runs on what is already exported, but the failure is recorded in
+    # runs.json, shown by `kbmail status` / the Copilot session hook, and makes the exit code 1, so a
+    # scheduled task doesn't keep "succeeding" for weeks without new mail.
+    problems: list[dict] = []
+
+    def attempt(step: str, fn) -> None:
         try:
+            fn()
+        except Exception as e:
+            from kbmail.outlook import OutlookUnavailable
+
+            if isinstance(e, OutlookUnavailable):  # not Windows / no pywin32: import-eml workspaces
+                print(f"({step} skipped: {e})")
+                return
+            print(f"{step} FAILED: {type(e).__name__}: {e}", file=sys.stderr)
+            problems.append({"step": step, "error": f"{type(e).__name__}: {e}"[:300]})
+
+    if ws.opt(args.export, "sync.export"):
+
+        def export():
             from kbmail import outlook
 
             outlook.export_mail(ws)
             if ws.cfg("outlook.calendar"):
                 outlook.export_calendar(ws)
-        except Exception as e:  # keep going: the rest works on what is already exported
-            print(f"(export skipped: {e})")
-    if ws.opt(args.teams, "sync.teams"):
-        from kbmail import teams
 
-        try:
+        attempt("export", export)
+    if ws.opt(args.teams, "sync.teams"):
+
+        def teams_export():
+            from kbmail import teams
+
             teams.export(ws, ws.cfg("teams.via"))
-        except Exception as e:  # e.g. not signed in; the rest of the sync still runs
-            print(f"(teams export skipped: {e})")
+
+        attempt("teams export", teams_export)
     rules.apply_rules(ws)
     prepare_batches(ws)
     kb.prepare_select(ws)
@@ -97,18 +118,20 @@ def cmd_sync(args):
     wiki.raw_import(ws)
     wiki.write_queue(ws)
     if ws.cfg("directory.enabled"):
-        from kbmail import directory
 
-        try:  # never prompts here: needs directory.auth kerberos or KBMAIL_DIRECTORY_PASSWORD
+        def directory_sync():  # never prompts here: needs directory.auth kerberos or KBMAIL_DIRECTORY_PASSWORD
+            from kbmail import directory
+
             people.build(ws, log=lambda *a: None)  # fresh contact list to look up
             directory.sync(ws, interactive=False)
-        except Exception as e:
-            print(f"(directory lookup skipped: {e})")
+
+        attempt("directory lookup", directory_sync)
     people.build(ws)
     assist.triage(ws)
-    ws.record_run("sync")
+    ws.record_run("sync", problems=problems)
     print()
     print_status(ws)
+    return 1 if problems else 0
 
 
 def cmd_show(args):
@@ -677,11 +700,47 @@ def main(argv=None) -> int:
     if args.cmd == "wiki" and args.action == "search" and not args.query:
         args.query = args.paths
     try:
-        rc = args.func(args)
+        if _needs_lock(args):
+            ws = Workspace.find(args.workspace)
+            with workspace_lock(ws, " ".join(_command_words(args))):
+                rc = args.func(args)
+        else:
+            rc = args.func(args)
     except WorkspaceError as e:
         print(e, file=sys.stderr)
         return 2
+    except LockBusy as e:
+        print(e, file=sys.stderr)
+        return 3
     return int(rc or 0)
+
+
+# Commands that change no state (a rebuilt cache is fine to lose), so they never wait for the lock.
+# `review` (interactive) is here too: a review session can last an hour, so instead of holding the
+# lock throughout it saves each answer under the lock, merged into the current labels.
+_NO_LOCK = {"init", "status", "show", "history", "mail", "svg2mermaid", "hook", "config", "git"}
+_NO_LOCK_ACTIONS = {
+    ("review", "interactive"),
+    ("label", "counts"),
+    ("rules", "evaluate"),
+    ("rules", "status"),
+    ("kb", "status"),
+    ("images", "status"),
+    ("questions", "list"),
+    ("wiki", "search"),
+    ("wiki", "graph"),
+    ("wiki", "status"),
+}
+
+
+def _command_words(args) -> list[str]:
+    action = getattr(args, "action", None)
+    return [args.cmd, action] if isinstance(action, str) else [args.cmd]
+
+
+def _needs_lock(args) -> bool:
+    words = _command_words(args)
+    return words[0] not in _NO_LOCK and tuple(words) not in _NO_LOCK_ACTIONS
 
 
 if __name__ == "__main__":

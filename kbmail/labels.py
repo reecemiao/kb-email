@@ -20,6 +20,7 @@ import sys
 from itertools import batched
 
 from kbmail.history import History
+from kbmail.lock import workspace_lock
 from kbmail.records import fmt_people, fmt_person, message_index, read_message
 from kbmail.redact import redact
 from kbmail.textutil import compact, now_iso
@@ -37,6 +38,22 @@ def load_labels(ws: Workspace) -> dict:
 
 def save_labels(ws: Workspace, labels: dict) -> None:
     ws.save_json(LABELS, labels)
+
+
+def save_labels_merged(ws: Workspace, labels: dict, changed: set[str]) -> dict:
+    """Write the `changed` entries of `labels` into the current labels.json and return the result.
+
+    For long-running callers (the interactive review) that don't hold the workspace lock: anything
+    another command wrote in the meantime (rule labels, Copilot proposals) is kept, and the user's
+    answers are not overwritten by that command's older copy.
+    """
+    with workspace_lock(ws, "review"):
+        fresh = load_labels(ws)
+        for mid in changed:
+            fresh[mid] = labels[mid]
+        save_labels(ws, fresh)
+    changed.clear()
+    return fresh
 
 
 def set_label(
@@ -272,6 +289,7 @@ def interactive_review(
     index = message_index(ws)
     ids = [m for m in review_queue(ws, source, area, order) if m in index]
     stats = {"confirmed": 0, "changed": 0, "skipped": 0}
+    changed: set[str] = set()
     if accept_above is not None:
         for mid in list(ids):
             c = labels[mid].get("confidence")
@@ -281,8 +299,9 @@ def interactive_review(
                     labels, mid, lab["labels"], "confirmed", "user", c, lab.get("reason", "") + " (bulk-accepted)"
                 )
                 stats["confirmed"] += 1
+                changed.add(mid)
                 ids.remove(mid)
-        save_labels(ws, labels)
+        labels = save_labels_merged(ws, labels, changed)
         out(f"Bulk-accepted {stats['confirmed']} label(s) with confidence >= {accept_above}.")
     choices = ws.labels_allowed
     hist = History.of(ws)
@@ -294,7 +313,10 @@ def interactive_review(
     i = 0
     while 0 <= i < len(ids):
         mid = ids[i]
-        rec, lab = index.get(mid), labels[mid]
+        rec, lab = index.get(mid), labels.get(mid)
+        if lab is None:  # removed by another command while the review was open
+            i += 1
+            continue
         try:
             _, body = read_message(ws, rec)
         except FileNotFoundError:
@@ -331,6 +353,7 @@ def interactive_review(
         if ans == "":
             set_label(labels, mid, lab["labels"], "confirmed", "user", conf, lab.get("reason", ""))
             stats["confirmed"] += 1
+            changed.add(mid)
         else:
             try:
                 picked = [choices[int(x) - 1] for x in ans.replace(" ", "").split(",") if x]
@@ -341,10 +364,11 @@ def interactive_review(
                 picked = [p for p in picked if p != OTHERS]
             set_label(labels, mid, picked, "confirmed", "user", 1.0, f"changed by user from {lab['labels']}")
             stats["changed"] += 1
-        save_labels(ws, labels)
+            changed.add(mid)
+        labels = save_labels_merged(ws, labels, changed)
         i += 1
-    save_labels(ws, labels)
-    ws.record_run("review", **stats)
+    with workspace_lock(ws, "review"):  # every answer is saved above; runs.json is shared state too
+        ws.record_run("review", **stats)
     out(f"\nReview saved: {stats}")
     return stats
 

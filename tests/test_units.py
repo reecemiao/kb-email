@@ -1,3 +1,5 @@
+import pytest
+
 from kbmail import rules
 from kbmail.records import message_index
 from kbmail.redact import redact
@@ -31,6 +33,52 @@ def test_redact():
     assert "abc123" not in text and "AKIA" not in text and "4111" not in text
     assert "1234 5678 9012 3456" in text  # fails Luhn -> kept
     assert n == 3
+
+
+@pytest.mark.parametrize(
+    "text, secret",
+    [
+        ("初期パスワード：Abc12345", "Abc12345"),  # no \b between 期 and パ
+        ("仮パスワードは Abc12345 です", "Abc12345"),
+        ("パスワードはAbc12345です", "Abc12345"),
+        ("仮パスワードは「abc def」です", "abc def"),
+        ("暗証番号: 4821", "4821"),
+        ("Password is hunter2.", "hunter2"),
+        ("PW: Abc12345", "Abc12345"),
+        ("PIN: 4821", "4821"),
+        ("pwd = 'my pass phrase'", "pass phrase"),
+        ("Server=x;User Id=sa;Password=S3cret!;Database=y", "S3cret"),
+        ("clone https://ken:S3cret@git.example.com/repo.git", "S3cret"),
+        ("Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"),
+        ("DefaultEndpointsProtocol=https;AccountKey=abcdEFGH1234abcdEFGH1234abcd==;", "abcdEFGH1234"),
+        ("https://x.blob.core.windows.net/c?sv=2020&sig=abcdEFGH1234%2Bxyz&se=1", "abcdEFGH1234"),
+        ("Amex 3782 822463 10005", "822463"),
+        ("カード番号 4111111111111111 です", "4111111111111111"),
+    ],
+)
+def test_redact_catches(text, secret):
+    out, n = redact(text)
+    assert secret not in out and n == 1, out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the password is required for login",
+        "パスワードが変わりました。再設定してください",
+        "order 1234567812345670 shipped",  # Luhn-valid, but ungrouped and no card context
+        "tracking 4111111111111111",
+        "spin: 5, opinion: none",
+        "basic understanding of the API",
+        "call 090-1234-5678",
+    ],
+)
+def test_redact_keeps(text):
+    assert redact(text) == (text, 0)
+
+
+def test_redact_keeps_spacing_around_cards():
+    assert redact("card 4111 1111 1111 1111 exp 12/29")[0] == "card [REDACTED-CARD] exp 12/29"
 
 
 def test_rule_matching_fields():

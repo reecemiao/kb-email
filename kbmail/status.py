@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from kbmail import images, kb, questions, rules, wiki
 from kbmail.labels import label_counts, load_labels
 from kbmail.records import calendar_index, message_index
+from kbmail.textutil import parse_dt
 from kbmail.workspace import Workspace
 
 
@@ -26,7 +29,9 @@ def collect(ws: Workspace) -> dict:
     conv = ws.load_json(kb.CONVERTED, {})
     unformatted = sum(1 for e in conv.values() if not kb.is_formatted(ws, e))
     wq = wiki.status(ws)
-    runs = {k: v.get("last_run") for k, v in ws.load_json("state/runs.json", {}).items() if not k.startswith("_")}
+    all_runs = ws.load_json("state/runs.json", {})
+    runs = {k: v.get("last_run") for k, v in all_runs.items() if not k.startswith("_")}
+    last_export = parse_dt(runs.get("export_mail"))
     s = {
         "messages": len(index),
         "calendar_events": len(calendar_index(ws)),
@@ -46,13 +51,33 @@ def collect(ws: Workspace) -> dict:
         "questions": q,
         "wiki": wq,
         "last_runs": runs,
+        "sync_problems": (all_runs.get("sync") or {}).get("problems") or [],
+        "export_age_days": (datetime.now().astimezone() - last_export).total_seconds() / 86400 if last_export else None,
     }
     s["next"] = next_actions(ws, s)
     return s
 
 
-def next_actions(ws: Workspace, s: dict) -> list[str]:
+def warnings(ws: Workspace, s: dict) -> list[str]:
+    """Problems that silently stop the knowledge base from updating: listed before anything else."""
     out = []
+    when = (s["last_runs"].get("sync") or "")[:16]
+    for p in s.get("sync_problems") or []:
+        out.append(
+            f"WARNING: the last `kbmail sync` ({when}) failed at {p.get('step')}: {p.get('error')}. "
+            "Fix the cause (Outlook running? signed in? VPN?) and run `kbmail sync` again."
+        )
+    warn_days, age = ws.cfg("sync.warn_after_days"), s.get("export_age_days")
+    if warn_days and age is not None and age > warn_days and ws.cfg("sync.export"):
+        out.append(
+            f"WARNING: no mail exported for {int(age)} days (last export {s['last_runs']['export_mail'][:16]}). "
+            "Run `kbmail sync` or check the scheduled task and state/sync.log."
+        )
+    return out
+
+
+def next_actions(ws: Workspace, s: dict) -> list[str]:
+    out = warnings(ws, s)
     if not ws.areas:
         out.append("Edit kbmail.yaml: set `me.emails` and the list of `areas`.")
     if s["messages"] == 0:

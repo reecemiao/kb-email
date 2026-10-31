@@ -9,6 +9,11 @@ Run commands from the workspace folder (or set `KBMAIL_WORKSPACE`). Every option
 falls back to a setting (`kbmail config show` lists them with their `KBMAIL_*` names). Add `-h` to
 any command for details.
 
+Exit codes: `0` ok, `1` the step failed (for `sync`: an export failed; the rest still ran, and
+`kbmail status` shows the warning), `2` no workspace or a bad setting, `3` another kbmail command
+(often the scheduled `kbmail sync`) held the workspace for 10 minutes: tell the user and retry later.
+Commands that change state wait for each other, so never run two kbmail commands in parallel.
+
 ## State and settings
 
 | command | what it does |

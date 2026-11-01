@@ -239,11 +239,11 @@ def test_meeting_responses_without_comment_are_skipped(ws, monkeypatch):
     )
     empty.Class, empty.MessageClass = 56, "IPM.Schedule.Meeting.Resp.Pos"
     thanks = Mail(
-        "承諾: Weekly",
+        "Accepted: Weekly",
         now - timedelta(hours=2),
         ("Ken", "ken@x.com"),
         [("Taro", "taro@contoso.com")],
-        "ありがとうございます。\n\n-----Original Appointment-----\nFrom: Taro\nWhen: Monday\nAgenda",
+        "Thanks!\n\n-----Original Appointment-----\nFrom: Taro\nWhen: Monday\nAgenda",
         "<r2@x>",
         conv="weekly",
     )

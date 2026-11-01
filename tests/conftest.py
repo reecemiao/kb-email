@@ -88,7 +88,7 @@ def mailbox(tmp_path):
 
 
 def build_mailbox(d):
-    """A small mailbox: a payments thread with attachments, infra mail, a newsletter, a Japanese mail."""
+    """A small mailbox: a payments thread with attachments, infra mail, a newsletter, a request from a colleague."""
     d.mkdir(parents=True, exist_ok=True)
     now = datetime.now().astimezone().replace(microsecond=0)
     root_id = make_eml(
@@ -143,10 +143,10 @@ def build_mailbox(d):
     )
     make_eml(
         d / "05.eml",
-        subject="請求システムの件",
-        frm="佐藤 花子 <hanako@contoso.com>",
+        subject="Billing system migration",
+        frm="Hanako Sato <hanako@contoso.com>",
         to=["taro@contoso.com"],
         date=now - timedelta(days=1),
-        body="山田さん\n請求システムの移行について、ご確認をお願いします。\nよろしくお願いいたします。",
+        body="Hi Taro,\nCould you review the billing system migration plan?\nBest regards,\nHanako",
     )
     return d

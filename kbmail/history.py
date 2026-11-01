@@ -31,30 +31,27 @@ _VERSION = 1
 # ---------------------------------------------------------------- parsing
 
 _FIELDS = {
-    "from": "from|差出人|送信者|発信者|发件人|發件人|寄件者",
-    "sent": "sent|date|送信日時|日時|日付|发送时间|發送時間|发送日期|时间|時間",
-    "to": "to|宛先|收件人|收件者",
-    "cc": "cc|bcc|抄送|副本",
-    "subject": "subject|件名|主题|主旨|主題",
-    "other": "importance|attachments|重要度|添付ファイル|附件",
+    "from": "from",
+    "sent": "sent|date",
+    "to": "to",
+    "cc": "cc|bcc",
+    "subject": "subject",
+    "other": "importance|attachments",
 }
 _FIELD_RE = re.compile(
-    r"^[\s>*_]*(?P<k>"
-    + "|".join(f"(?P<{k}>{v})" for k, v in _FIELDS.items())
-    + r")\s*[*_]*\s*[:：]\s*[*_]*\s*(?P<v>.*)$",
+    r"^[\s>*_]*(?P<k>" + "|".join(f"(?P<{k}>{v})" for k, v in _FIELDS.items()) + r")\s*[*_]*\s*:\s*[*_]*\s*(?P<v>.*)$",
     re.I,
 )
 _INLINE_FIELD_RE = re.compile(
-    r"\s+(?=[*_]*(?:" + "|".join(_FIELDS[k] for k in ("sent", "to", "cc", "subject")) + r")[*_]*\s*[:：])", re.I
+    r"\s+(?=[*_]*(?:" + "|".join(_FIELDS[k] for k in ("sent", "to", "cc", "subject")) + r")[*_]*\s*:)", re.I
 )
 _SEPARATOR_RE = re.compile(
-    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|original appointment|"
-    r"元のメッセージ|転送されたメッセージ|元の予定|原始邮件|原始郵件)\s*-{2,}|_{20,})\s*$",
+    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|original appointment)\s*-{2,}|_{20,})\s*$",
     re.I,
 )
 _WROTE_RE = re.compile(
-    r"^[\s>*_]*(?:on .{4,200}wrote:|\d{4}[年/-]\d{1,2}[月/-]\d{1,2}.{0,80}(?:wrote|書きました|写道)[:：]?|"
-    r"\d{4}[年/-]\d{1,2}[月/-]\d{1,2}.{0,80}<[^>]+@[^>]+>\s*[:：])\s*$",
+    r"^[\s>*_]*(?:on .{4,200}wrote:|\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,80}wrote:?|"
+    r"\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,80}<[^>]+@[^>]+>\s*:)\s*$",
     re.I,
 )
 EMAIL_RE = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
@@ -137,7 +134,7 @@ def _split_inline_header(line: str) -> list[str]:
 
 def _wrote_header(line: str) -> dict:
     p = _person(line)
-    m = re.search(r",\s*([^,<]+?)\s*(?:<[^>]*>)?\s*(?:wrote|書きました|写道)?\s*[:：]?\s*$", line)
+    m = re.search(r",\s*([^,<]+?)\s*(?:<[^>]*>)?\s*(?:wrote)?\s*:?\s*$", line)
     name = "" if p["email"] or not m else m.group(1).strip()
     return {"from": "", "sender": {"name": name, "email": p["email"]}, "sent": line}
 
@@ -191,24 +188,15 @@ def _tidy(text: str) -> str:
 # ---------------------------------------------------------------- dates
 
 _MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
-_WEEKDAY_RE = re.compile(
-    r"(?i)\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?|[(（][月火水木金土日一二三四五六天][)）]|"
-    r"[月火水木金土日]曜日?|(星期|周|週|礼拜|禮拜)[一二三四五六日天]"
-)
+_WEEKDAY_RE = re.compile(r"(?i)\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?")
 
 
 def parse_loose_dt(text: str) -> list[datetime]:
-    """Dates as shown in quoted headers ('Thursday, July 30, 2026 3:48 PM', '2026年7月30日 15:48').
+    """Dates as shown in quoted headers ('Thursday, July 30, 2026 3:48 PM', '30 July 2026 15:48').
 
     Returns naive local times; two candidates when day and month are ambiguous (07/08/2026)."""
     s = unicodedata.normalize("NFKC", text or "")
-    s = re.sub(
-        r"(午前|午後|上午|下午|早上|晚上)\s*(\d{1,2}:\d{2})",
-        lambda m: f"{m.group(2)} " + ("AM" if m.group(1) in ("午前", "上午", "早上") else "PM"),
-        s,
-    )
     s = _WEEKDAY_RE.sub(" ", s)
-    s = re.sub(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", r"\1-\2-\3 ", s)
     s = re.sub(r"\bat\b|,", " ", s, flags=re.I)
     tm = re.search(r"(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap])?\.?\s*m?\.?", s, re.I)
     if not tm:

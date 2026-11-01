@@ -141,7 +141,7 @@ also creates an all-commented `.env` (git-ignored in the workspace) that you can
 lines. `kbmail init --upgrade` regenerates `.env.example` and never touches `.env`.
 
 ```dotenv
-KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.co.jp
+KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.net
 KBMAIL_OUTLOOK__DAYS=60
 KBMAIL_OUTLOOK__FOLDERS=inbox,sent,Inbox/Projects
 KBMAIL_COPILOT__VISION=false

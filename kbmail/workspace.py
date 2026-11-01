@@ -59,7 +59,6 @@ DEFAULT_CONFIG: dict = {
         "skip_meeting_responses": True,
         "boilerplate_lines": [
             "(?i)(internal|public|confidential|restricted|highly restricted)",
-            "社外秘|機密|社内限り",
         ],
     },
     "labeling": {"batch_size": 40, "limit": None, "preview_chars": 1000, "rule_threshold": 2.0},

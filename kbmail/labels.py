@@ -383,7 +383,7 @@ def export_csv(ws: Workspace, source: str = "proposed", log=print) -> str:
     index = message_index(ws)
     p = ws.path(CSV_FILE)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("w", encoding="utf-8-sig", newline="") as f:  # utf-8-sig so Excel shows Japanese correctly
+    with p.open("w", encoding="utf-8-sig", newline="") as f:  # utf-8-sig so Excel shows non-ASCII names correctly
         w = csv.writer(f)
         w.writerow(["id", "date", "from", "subject", "proposed", "confidence", "reason", "decision"])
         for mid in review_queue(ws, source):

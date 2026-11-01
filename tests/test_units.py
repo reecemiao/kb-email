@@ -8,24 +8,21 @@ from kbmail.textutil import normalize_subject, strip_quoted, tokenize
 from kbmail.workspace import init_workspace
 
 
-def test_strip_quoted_english_and_japanese():
+def test_strip_quoted():
     en = "New text here.\n\nFrom: Bob <b@x.com>\nSent: Monday\nTo: me\n\nold text"
     assert strip_quoted(en) == "New text here."
-    ja = "了解しました。\n\n差出人: 佐藤\n送信日時: 2026年10月1日\n宛先: 山田\n\n古い本文"
-    assert strip_quoted(ja) == "了解しました。"
     md = "Reply.\n\n**From:** Bob\n**Sent:** Monday\n\nold"
     assert strip_quoted(md) == "Reply."
     # a "From:" line that is not a reply header is kept
     assert "From: the team" in strip_quoted("Hello\nFrom: the team, thanks for all\nbye")
 
 
-def test_tokenize_cjk_bigrams():
-    toks = tokenize("請求システム migration")
-    assert "請求" in toks and "migration" in toks
+def test_tokenize():
+    assert tokenize("The billing system migration v2.1") == ["billing", "system", "migration", "v2.1"]
 
 
 def test_normalize_subject():
-    assert normalize_subject("RE: Fw: 返信: Budget") == "budget"
+    assert normalize_subject("RE: Fw: AW: [EXT] Budget") == "budget"
 
 
 def test_redact():
@@ -48,7 +45,7 @@ def test_redact():
         ("DefaultEndpointsProtocol=https;AccountKey=abcdEFGH1234abcdEFGH1234abcd==;", "abcdEFGH1234"),
         ("https://x.blob.core.windows.net/c?sv=2020&sig=abcdEFGH1234%2Bxyz&se=1", "abcdEFGH1234"),
         ("Amex 3782 822463 10005", "822463"),
-        ("カード番号 4111111111111111 です", "4111111111111111"),
+        ("card number 4111111111111111 on file", "4111111111111111"),
     ],
 )
 def test_redact_catches(text, secret):

@@ -4,21 +4,20 @@ from __future__ import annotations
 
 import re
 
-# Password-like keywords (passwords are written in English; パスワード/暗証番号 as before).
-_PW_WORDS = r"\b(?:password|passwd|passcode|pwd|pw|pin|パスワード|暗証番号)"
+_PW_WORDS = r"\b(?:password|passwd|passcode|pwd|pw|pin)"
 _QUOTED = r"""(?:'[^'\n]+'|"[^"\n]+")"""
 _VALUE = rf"(?:{_QUOTED}|[!-:<-~]+)"  # quoted, or printable ASCII except `;`
 
 _PATTERNS = [
     # `password: x`, `Password=x;` (connection strings)
-    (rf"(?i)({_PW_WORDS})(\s*[:：=]\s*){_VALUE}", r"\1\2[REDACTED]"),
+    (rf"(?i)({_PW_WORDS})(\s*[:=]\s*){_VALUE}", r"\1\2[REDACTED]"),
     # `password is x`: a weaker separator, so an unquoted value must contain a digit or symbol
     # ("the password is required" keeps its text)
     (
         rf"(?i)({_PW_WORDS})(\s+is\s+)(?:{_QUOTED}|(?=[!-~]*[0-9!-/:-@\[-`{{-~])[!-:<-~]+)",
         r"\1\2[REDACTED]",
     ),
-    (r"(?i)\b(api[_-]?key|secret|token|client[_-]?secret)\s*[:：=]\s*['\"]?[A-Za-z0-9_\-./+=]{8,}", r"\1: [REDACTED]"),
+    (r"(?i)\b(api[_-]?key|secret|token|client[_-]?secret)\s*[:=]\s*['\"]?[A-Za-z0-9_\-./+=]{8,}", r"\1: [REDACTED]"),
     (r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED-AWS-KEY]"),
     (r"\b(ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED-GITHUB-TOKEN]"),
     (r"\bsk-[A-Za-z0-9_\-]{20,}\b", "[REDACTED-API-KEY]"),
@@ -40,10 +39,7 @@ _CARD = re.compile(r"(?<![\d.])\d(?:[ -]?\d){12,18}(?![\d])")
 _CARD_PREFIX = re.compile(r"^(?:3[0-8]|[2456])")
 # An ungrouped run of digits is only a card when the text around it says so. Order numbers, tracking
 # ids and ticket numbers pass the Luhn check about one time in ten and must not be lost.
-_CARD_CONTEXT = re.compile(
-    r"(?i)(card|credit|visa|master|amex|american express|jcb|diners|discover|unionpay|"
-    r"カード|クレジット|クレカ)"
-)
+_CARD_CONTEXT = re.compile(r"(?i)(card|credit|visa|master|amex|american express|jcb|diners|discover|unionpay)")
 _CARD_CONTEXT_CHARS = 40
 
 

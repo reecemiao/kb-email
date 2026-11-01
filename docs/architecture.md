@@ -115,7 +115,7 @@ README.md                   workspace guide, incl. version control (what is trac
   `text/calendar` part with `METHOD:REPLY`) are not exported when they carry no comment. Not a
   comment: the copied invitation (`-----Original Appointment-----`), lines matching
   `outlook.boilerplate_lines` (classification labels such as `INTERNAL`), and a bare "Thanks" / "OK" /
-  "ありがとうございます". A response with a real comment ("Declined - on leave, please send the notes")
+  "Noted". A response with a real comment ("Declined - on leave, please send the notes")
   is exported like any mail. Who accepted or declined is kept in the calendar export: each attendee
   has a `response` (accepted / declined / tentative / organizer) for meetings you organize.
   Responses exported earlier are labeled `others` (source `noise`) by `kbmail label prepare`
@@ -138,11 +138,10 @@ support ≥ 3 and purity ≥ 0.8 among confirmed labels.
 ## Quoted history (replies and forwards)
 
 `kbmail/history.py` splits every body into its own text and the quoted messages below it: Outlook
-`From/Sent/To/Cc/Subject` blocks (English, Japanese, Chinese; also on one line, as HTML mail renders
-them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
+`From/Sent/To/Cc/Subject` blocks (also on one line, as HTML mail renders them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
 it checks whether that message is exported on its own. A match needs three things:
 - **sender:** the same e-mail address, or the same name in any order ("MORGAN, Alex" = "Alex MORGAN");
-- **time:** the quoted time ("2026年7月30日 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
+- **time:** the quoted time ("30 July 2026 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
   message's time in some time zone (whole or half hours, a few minutes' tolerance). A copy from
   another day never matches;
 - **text:** the exported message's own text is found in the quote (letters and digits only, so line
@@ -183,8 +182,7 @@ citations, supersession instead of overwrite, and the ingest/query/lint operatio
   from the index, supersession without `superseded_by`, and **stale pages**.
   Effective confidence = `confidence × 0.5^(age / half-life)` with half-lives per `decay` class
   (`wiki.half_life_days`)
-* **hybrid search**: BM25 (CJK bigram tokenization, so Japanese works without a morphological
-  analyzer) plus one-hop graph expansion, combined with reciprocal rank fusion and down-weighted by
+* **hybrid search**: BM25 plus one-hop graph expansion, combined with reciprocal rank fusion and down-weighted by
   effective confidence and supersession
 * **graph** from relations and wikilinks, with Mermaid neighbourhood rendering (`kbmail wiki graph --page ...`)
 * **audit trail** (`state/wiki_audit.jsonl`) next to the human-readable `wiki/log.md`
@@ -216,7 +214,7 @@ place to add one (e.g. a local sentence-transformers index) if the wiki grows pa
   and SAS `sig=`, private keys, card numbers, plus your own `privacy.extra_patterns`. Previews in
   labeling and selection batches are redacted too. A card number must pass the Luhn check, start
   with an issuer prefix, and be written in groups (`4111 1111 1111 1111`) or follow a word such as
-  "card" / "カード": a bare run of digits passes the Luhn check one time in ten, and order or
+  "card": a bare run of digits passes the Luhn check one time in ten, and order or
   tracking numbers are knowledge worth keeping. After "is", only a value with a digit or
   symbol counts as a password, so "the password is required" keeps its text.
 * Copilot instructions forbid sending content to external services and storing non-work personal data.

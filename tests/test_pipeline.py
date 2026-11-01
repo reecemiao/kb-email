@@ -24,7 +24,7 @@ def _label_everything(ws):
         lines = []
         for mid in b["ids"]:
             s = subj[mid].lower()
-            label = "payments" if "payment" in s or "請求" in s else "infra" if "server" in s else "others"
+            label = "payments" if "payment" in s or "billing" in s else "infra" if "server" in s else "others"
             lines.append(json.dumps({"id": mid, "labels": [label], "confidence": 0.8, "reason": "test"}))
         ws.path(b["result"]).write_text("\n".join(lines), encoding="utf-8")
     import_results(ws, log=quiet)
@@ -58,7 +58,7 @@ def test_full_pipeline(ws, mailbox):
             "threshold": 2,
             "rules": [
                 {"id": "r001", "area": "others", "weight": 2, "when": {"from": ["noreply"]}},
-                {"id": "r002", "area": "payments", "weight": 2, "when": {"subject": ["re:payment|請求"]}},
+                {"id": "r002", "area": "payments", "weight": 2, "when": {"subject": ["re:payment|billing"]}},
                 {"id": "r003", "area": "bogus", "weight": 1, "when": {"subject": ["x"]}},
             ],
         },
@@ -159,7 +159,7 @@ def test_full_pipeline(ws, mailbox):
     assert ppl["sarah@contoso.com"]["from_them"] == 1 and ppl["sarah@contoso.com"]["to_them"] == 1
     assert ppl["sarah@contoso.com"]["internal"] is True
     tri = assist.triage(ws, log=quiet)
-    assert any("請求" in d["subject"] for d in tri["need_reply"])
+    assert any("Billing" in d["subject"] for d in tri["need_reply"])
     assert not any("newsletter" in d["subject"].lower() for d in tri["need_reply"])
 
     # status reflects the state
@@ -236,6 +236,8 @@ def test_wiki_lint_and_search(ws):
     assert "owned_by" in wiki.graph_mermaid(g, "systems/payment-api")
 
 
-def test_frontmatter_roundtrip_japanese():
-    meta, body = parse_frontmatter(dump_frontmatter({"subject": "請求システム", "to": [{"name": "佐藤"}]}, "本文"))
-    assert meta["subject"] == "請求システム" and body.strip() == "本文"
+def test_frontmatter_roundtrip_unicode():
+    meta, body = parse_frontmatter(
+        dump_frontmatter({"subject": "Café billing", "to": [{"name": "José Núñez"}]}, "Grüße")
+    )
+    assert meta["subject"] == "Café billing" and meta["to"][0]["name"] == "José Núñez" and body.strip() == "Grüße"

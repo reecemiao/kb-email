@@ -685,7 +685,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8")  # Windows consoles + Japanese text
+            stream.reconfigure(encoding="utf-8")  # Windows consoles + non-ASCII names
         except (AttributeError, ValueError):
             pass
     parser = build_parser()

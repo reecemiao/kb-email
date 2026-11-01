@@ -70,7 +70,7 @@ AD = {  # standard Active Directory style: manager is a DN
     f"cn=hanako,{BASE}": {
         "cn": "hanako",
         "mail": "hanako@contoso.com",
-        "displayName": "佐藤 花子",
+        "displayName": "Hanako Sato",
         "title": "Analyst",
         "department": "Payments",
         "employeeID": "40",

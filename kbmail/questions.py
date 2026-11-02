@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from kbmail.convert import session as convert_session
 from kbmail.convert import url_to_markdown
 from kbmail.redact import redact
 from kbmail.textutil import dump_frontmatter, now_iso, slugify
@@ -106,7 +107,8 @@ def ingest(ws: Workspace, fetch: bool = True, log=print) -> dict:
         ]
         if fetch:
             for url in URL_RE.findall(str(q["answer"])):
-                text, err = url_to_markdown(url)
+                with convert_session(ws, log):
+                    text, err = url_to_markdown(url)
                 if err or not text.strip():
                     log(
                         f"  could not fetch {url}: {err or 'empty page'} - save the page (PDF/HTML) into raw/inbox/ "

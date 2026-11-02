@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from kbmail.convert import file_to_markdown
+from kbmail.convert import session as convert_session
 from kbmail.redact import redact
 from kbmail.textutil import (
     BM25,
@@ -51,6 +52,11 @@ LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
 
 def raw_import(ws: Workspace, log=print) -> int:
     """Convert anything dropped in raw/inbox/ (pdf, docx, pptx, xlsx, html, ...) into raw/docs/*.md."""
+    with convert_session(ws, log):
+        return _raw_import(ws, log)
+
+
+def _raw_import(ws: Workspace, log) -> int:
     inbox = ws.path("raw/inbox")
     n = 0
     for f in sorted(inbox.rglob("*")) if inbox.exists() else []:

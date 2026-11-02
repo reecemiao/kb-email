@@ -100,6 +100,22 @@ security commonly blocks. From 0.12.13 on, uv builds the launcher in memory inst
 **`build_system.requires = ["uv-build…"]` does not contain the current uv version**: fixed in
 `pyproject.toml`. Run `git pull`.
 
+**`kbmail kb convert` exits silently with `0xC0000005` (access violation), and Event Viewer names
+`msvcp140.dll` from McAfee (or another security product) as the faulting module**
+
+Security software often loads its own, older copy of the Visual C++ runtime into every process.
+Native libraries built with a newer compiler crash in that copy. The usual victim was onnxruntime,
+which markitdown used for content-based file type detection (magika). kbmail now turns that
+detection off (`convert.sniff_content: false`, the default) and picks the converter from the file
+extension, so onnxruntime is never loaded. Run `git pull` and convert again.
+
+If a crash still happens, the run prints a Python stack (`Windows fatal exception: access violation`)
+that names the converter. Threads converted before the crash are kept. The next run warns about the
+file it crashed on and skips it from then on. The skipped files are listed in
+`state/convert_crash.json`; remove an entry there to retry that file. A permanent fix is to install
+the current [Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
+or to ask IT to update the security product or exclude Python from its injection.
+
 ## Version control (GitHub)
 
 The workspace can be its own **private** git repository. You get a reviewable history of every

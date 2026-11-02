@@ -67,6 +67,7 @@ DEFAULT_CONFIG: dict = {
     "kb": {"include_auto_labels": True, "message_chars": 6000, "select_batch_threads": 8},
     "copilot": {"vision": False},
     "images": {"min_bytes": 6000},
+    "convert": {"sniff_content": False},
     "privacy": {"redact": True, "extra_patterns": []},
     "questions": {"fetch_links": True},
     "people": {"top_n": 80},
@@ -163,6 +164,8 @@ CONFIG_HELP: dict[str, str] = {
     "kb.select_batch_threads": "threads per KB selection batch (kb prepare --batch-threads)",
     "copilot.vision": "true if Copilot may look at images",
     "images.min_bytes": "ignore smaller images (logos, signature icons)",
+    "convert.sniff_content": "let markitdown detect file types from content (magika/onnxruntime); off because "
+    "it can crash on Windows where security software loads an old msvcp140.dll",
     "privacy.redact": "strip passwords/tokens/keys before raw/ and wiki/",
     "privacy.extra_patterns": "extra regexes to redact (YAML list)",
     "questions.fetch_links": "fetch URLs found in answers into raw/web (questions ingest --[no-]fetch)",

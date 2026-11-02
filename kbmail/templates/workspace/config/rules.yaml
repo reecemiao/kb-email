@@ -1,0 +1,17 @@
+# Labeling rules. Written by Copilot (/kb-rules) from your confirmed labels,
+# validated + snapshotted by `kbmail rules commit`. Safe to edit by hand.
+#
+# A message gets an area when the summed weight of matching rules >= threshold.
+# Fields: from, from_domain, to, cc, participants, participant_domain, subject,
+#         body, folder, direction, categories, attachment, source
+# Patterns: case-insensitive substring, or "re:<regex>". Domains match subdomains.
+#
+# Example:
+#   - id: r001
+#     area: area1
+#     description: Mail from the vendor's domain
+#     weight: 3
+#     when: {from_domain: [vendor.example.com]}
+#     unless: {subject: [newsletter]}
+threshold: 2.0
+rules: []

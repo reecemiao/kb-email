@@ -1,0 +1,87 @@
+# Corporate directory (LDAP / Active Directory) settings for kbmail.
+#
+#   kbmail directory init            # copies this file to config/directory.yaml (git-ignored)
+#   kbmail directory test            # bind + look yourself up
+#   kbmail directory lookup a@b.com  # one person, rendered with `view`
+#
+# Outside a workspace: kbmail directory lookup --config <file> <email>
+# (or set KBMAIL_DIRECTORY_CONFIG, or use ~/.kbmail/directory.yaml).
+#
+# Company-specific values (host names, search base, schema) belong in config/directory.yaml, which
+# is git-ignored by default. Never put a password here: you are prompted, or kbmail reads
+# KBMAIL_DIRECTORY_PASSWORD from the environment, or you use `auth: kerberos`.
+# Every key is optional; the values below are the defaults for a standard Active Directory.
+
+enabled: false                 # true: `kbmail sync` refreshes the directory cache (non-interactive)
+server: ldap.example.com
+port: 636                      # LDAPS; 3269 = AD global catalog over SSL
+use_ssl: true
+validate_cert: true
+ca_certs_file: ''              # PEM bundle with your company's CA, e.g. 'C:\Users\me\certs\corp-ca.pem'
+auth: ntlm                     # ntlm | kerberos | simple | anonymous
+user: ''                       # empty = %USERDOMAIN%\%USERNAME%
+search_base: 'OU=People,DC=example,DC=com'
+scope: subtree                 # subtree | level (one level below search_base) | base
+email_filter: '(|(mail={email})(proxyAddresses=smtp:{email}))'
+id_filter: '(|(employeeID={id})(cn={id}))'
+
+# kbmail's own fields (cache, people digest): name -> LDAP attributes, first non-empty wins.
+fields:
+  name: [displayName]
+  email: [mail]
+  title: [title]
+  department: [department]
+  company: [company]
+  office: [physicalDeliveryOfficeName]
+  country: [co]
+  employee_id: [employeeID]
+  employee_type: [employeeType]
+
+# References to other people. `dn`: attribute holding a DN; `id`: attribute holding an id that is
+# looked up with id_filter; `name`: display name to use when nothing resolves.
+# Only `manager` drives the reporting-line analysis (manager / peer / direct report ...).
+relations:
+  manager: {dn: [manager], id: [], name: []}
+  assistant: {dn: [assistant], id: [], name: []}
+  # Id-based schemas, e.g.:
+  # manager: {id: [x-linemanagerid], name: [x-linemanagername]}
+  # functional_manager: {id: [x-functionalmanagerid], name: [x-functionalmanagername]}
+
+digest_fields: [title, department, company, office, country]   # shown in the people digest / wiki
+chain_depth: 3
+cache_days: 30
+max_lookups: 300
+
+# ---------------------------------------------------------------- output views
+# `kbmail directory lookup` prints `view` (empty = the plain record).
+# Templates: {attr} (case-insensitive), filters {attr|upper}, |lower, |title, |oneline,
+#   |map:K=V;K2=V2;*=fallback, |default:text; relations {@manager.name} / .email / .id / .title;
+#   helpers {=name} from `computed`; [ ... ] = optional part, dropped if a value inside is empty.
+# Value specs: "template" | {join: sep, parts: [...]} | {first: [tpl, ...]} (first non-empty)
+#   | {value: tpl, when: tpl} | {..., omit_empty: true}
+view: card
+
+computed:
+  manager: "{@manager.name}[ ({@manager.id})]"
+
+views:
+  card:
+    Basic Information:
+      Staff ID: "{employeeID}"
+      Name: "{displayName}"
+      Job Title: "{title}"
+      Department: "{department}"
+      Company: "{company}"
+      Employee Type: "{employeeType|map:E=Employee;C=Contractor}"
+      AD Account: "{userPrincipalName}"
+    Detailed Information:
+      Manager: "{=manager}"
+      Assistant: {value: "{@assistant.name}", omit_empty: true}
+      Phone: "{telephoneNumber}"
+      Mobile: "{mobile}"
+      Email: "{mail}"
+      Office Location: "{physicalDeliveryOfficeName}[, {postalAddress|oneline}]"
+      Country/Territory: "{co}"
+    Record:
+      Created Time: "{whenCreated}"
+      Changed Time: "{whenChanged}"

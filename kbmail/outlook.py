@@ -43,12 +43,6 @@ SKIP_FOLDER_NAMES = {
     "conversation history",
     "rss feeds",
     "rss subscriptions",
-    "削除済みアイテム",
-    "迷惑メール",
-    "送信トレイ",
-    "下書き",
-    "同期の失敗",
-    "会話の履歴",
 }
 
 EXPORT_STATE = "state/export_state.json"
@@ -395,7 +389,7 @@ def _attendees(item) -> list[dict]:
     return out
 
 
-_TEAMS_BOILERPLATE = re.compile(r"_{20,}.*?(Microsoft Teams|Teams 会議|Join the meeting).*?_{20,}", re.S | re.I)
+_TEAMS_BOILERPLATE = re.compile(r"_{20,}.*?(Microsoft Teams|Join the meeting).*?_{20,}", re.S | re.I)
 
 
 def export_calendar(ws: Workspace, days: int | None = None, future_days: int | None = None, log=print) -> dict:

@@ -55,7 +55,7 @@ def _mailbox(d, with_original: bool):
         frm="Chris LEE <chris@corp.example>",
         to=["taro@contoso.com", "sam@corp.example"],
         date=ORIG + timedelta(days=46),
-        body=_fw_body("2026年7月30日 15:48"),
+        body=_fw_body("30 July 2026 15:48"),
     )
     make_eml(
         d / "2.eml",
@@ -81,7 +81,7 @@ def test_forward_keeps_what_it_forwards(ws, tmp_path):
     prepare_batches(ws, log=quiet)
     batch = ws.path("work/labeling/batch_001.md").read_text(encoding="utf-8")
     assert "FYI." in batch and "runs the batch jobs for billing" in batch
-    assert "--- quoted: Alex MORGAN <alex@corp.example> | 2026年7月30日 15:48 | RE: APP.PLATFORM ---" in batch
+    assert "--- quoted: Alex MORGAN <alex@corp.example> | 30 July 2026 15:48 | RE: APP.PLATFORM ---" in batch
     # The reply quotes the forward (exported) -> pointer; Dan's mail is not exported -> kept once per message.
     msgs = _by_subject(ws)
     fw, re_ = msgs["FW: APP.PLATFORM"], msgs["RE: FW: APP.PLATFORM"]
@@ -138,9 +138,10 @@ def test_split_formats_and_dates():
     own, segs = split("ok\n\nOn Thu, Jul 30, 2026 at 3:48 PM Dan <dan@x.com> wrote:\n> line1\n>> deeper\n")
     assert own == "ok" and segs[0].text == "line1\ndeeper" and segs[0].dates == [datetime(2026, 7, 30, 15, 48)]
     own, segs = split(
-        "了解です。\n\n差出人: 佐藤 <sato@x.jp>\n送信日時: 2026年10月1日(木) 午後 1:05\n宛先: 山田\n件名: 件\n\n本文"
+        "Got it.\n\nFrom: Sato <sato@x.example>\nSent: Thursday, October 1, 2026 1:05 PM\nTo: Taro\n"
+        "Subject: plan\n\nbody"
     )
-    assert own == "了解です。" and segs[0].dates == [datetime(2026, 10, 1, 13, 5)] and segs[0].text == "本文"
+    assert own == "Got it." and segs[0].dates == [datetime(2026, 10, 1, 13, 5)] and segs[0].text == "body"
     own, segs = split("Hello\nFrom: the team, thanks for all\nbye")
     assert segs == [] and "From: the team" in own
     assert parse_loose_dt("07/08/2026 10:00") == [datetime(2026, 8, 7, 10, 0), datetime(2026, 7, 8, 10, 0)]

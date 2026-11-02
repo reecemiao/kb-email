@@ -335,7 +335,7 @@ def export_powershell(ws: Workspace, days: int | None = None, log=print) -> dict
 
 _BRACKET_HEADER = re.compile(r"^\[(?P<ts>[^\]]{3,40})\]\s*(?P<name>[^:\n\]]{1,80}?)\s*(?::\s*(?P<text>.*))?$")
 _TS_LINE = re.compile(
-    r"^\s*(?:(?:\d{4}[/.-]|\d{4}年)?\d{1,2}[/.月-]\d{1,4}日?(?:[/.-]\d{2,4})?,?\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp]\.?[Mm]\.?)?\s*$"
+    r"^\s*(?:(?:\d{4}[/.-])?\d{1,2}[/.-]\d{1,4}(?:[/.-]\d{2,4})?,?\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp]\.?[Mm]\.?)?\s*$"
 )
 _TS_FORMATS = [
     "%m/%d/%Y %I:%M %p",
@@ -344,7 +344,6 @@ _TS_FORMATS = [
     "%m/%d/%y %H:%M",
     "%Y/%m/%d %H:%M",
     "%Y-%m-%d %H:%M",
-    "%Y年%m月%d日 %H:%M",
     "%d.%m.%Y %H:%M",
     "%m/%d %I:%M %p",
     "%m/%d %H:%M",
@@ -355,18 +354,11 @@ _TS_FORMATS = [
     "%Y/%m/%d %H:%M:%S",
     "%Y/%m/%d %I:%M %p",
     "%Y-%m-%d %I:%M %p",
-    "%Y年%m月%d日 %I:%M %p",
 ]
 
 
 def _norm_ts(text: str) -> str:
-    """'午後 1:05' -> '1:05 PM' (Japanese puts AM/PM before the time)."""
-    t = re.sub(
-        r"(午前|午後)\s*(\d{1,2}:\d{2}(?::\d{2})?)",
-        lambda m: m.group(2) + (" AM" if m.group(1) == "午前" else " PM"),
-        text,
-    )
-    return re.sub(r"\s+", " ", t).strip()
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _parse_ts(text: str, fallback: datetime) -> datetime:

@@ -59,7 +59,6 @@ DEFAULT_CONFIG: dict = {
         "skip_meeting_responses": True,
         "boilerplate_lines": [
             "(?i)(internal|public|confidential|restricted|highly restricted)",
-            "社外秘|機密|社内限り",
         ],
     },
     "labeling": {"batch_size": 40, "limit": None, "preview_chars": 1000, "rule_threshold": 2.0},
@@ -74,7 +73,7 @@ DEFAULT_CONFIG: dict = {
     "triage": {"days": 14, "follow_up_after_days": 3},
     "mail": {"search_limit": 15},
     "style": {"samples": 40},
-    "sync": {"export": True, "teams": False},
+    "sync": {"export": True, "teams": False, "warn_after_days": 2},
     "wiki": {
         "half_life_days": {"fast": 30, "normal": 180, "slow": 730},
         "stale_below": 0.35,
@@ -174,6 +173,7 @@ CONFIG_HELP: dict[str, str] = {
     "style.samples": "sent messages collected by `kbmail style` (-n)",
     "sync.export": "export from Outlook during `kbmail sync` (--[no-]export)",
     "sync.teams": "also export Teams during `kbmail sync` (--[no-]teams)",
+    "sync.warn_after_days": "status warns when the last successful mail export is older than this (0 = never)",
     "wiki.half_life_days.fast": "confidence half-life for decay: fast",
     "wiki.half_life_days.normal": "confidence half-life for decay: normal",
     "wiki.half_life_days.slow": "confidence half-life for decay: slow",
@@ -508,7 +508,9 @@ class Workspace:
     def save_yaml(self, rel: str, obj) -> Path:
         p = self.path(rel)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(yaml.safe_dump(obj, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+        tmp = p.with_suffix(p.suffix + ".tmp")  # write-then-rename, like save_json: never a half-written file
+        tmp.write_text(yaml.safe_dump(obj, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+        os.replace(tmp, p)
         return p
 
     # ------------------------------------------------------------ run log

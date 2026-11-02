@@ -1,3 +1,5 @@
+import pytest
+
 from kbmail import rules
 from kbmail.records import message_index
 from kbmail.redact import redact
@@ -6,24 +8,21 @@ from kbmail.textutil import normalize_subject, strip_quoted, tokenize
 from kbmail.workspace import init_workspace
 
 
-def test_strip_quoted_english_and_japanese():
+def test_strip_quoted():
     en = "New text here.\n\nFrom: Bob <b@x.com>\nSent: Monday\nTo: me\n\nold text"
     assert strip_quoted(en) == "New text here."
-    ja = "了解しました。\n\n差出人: 佐藤\n送信日時: 2026年10月1日\n宛先: 山田\n\n古い本文"
-    assert strip_quoted(ja) == "了解しました。"
     md = "Reply.\n\n**From:** Bob\n**Sent:** Monday\n\nold"
     assert strip_quoted(md) == "Reply."
     # a "From:" line that is not a reply header is kept
     assert "From: the team" in strip_quoted("Hello\nFrom: the team, thanks for all\nbye")
 
 
-def test_tokenize_cjk_bigrams():
-    toks = tokenize("請求システム migration")
-    assert "請求" in toks and "migration" in toks
+def test_tokenize():
+    assert tokenize("The billing system migration v2.1") == ["billing", "system", "migration", "v2.1"]
 
 
 def test_normalize_subject():
-    assert normalize_subject("RE: Fw: 返信: Budget") == "budget"
+    assert normalize_subject("RE: Fw: AW: [EXT] Budget") == "budget"
 
 
 def test_redact():
@@ -31,6 +30,46 @@ def test_redact():
     assert "abc123" not in text and "AKIA" not in text and "4111" not in text
     assert "1234 5678 9012 3456" in text  # fails Luhn -> kept
     assert n == 3
+
+
+@pytest.mark.parametrize(
+    "text, secret",
+    [
+        ("Password is hunter2.", "hunter2"),
+        ("PW: Abc12345", "Abc12345"),
+        ("PIN: 4821", "4821"),
+        ("pwd = 'my pass phrase'", "pass phrase"),
+        ("Server=x;User Id=sa;Password=S3cret!;Database=y", "S3cret"),
+        ("clone https://ken:S3cret@git.example.com/repo.git", "S3cret"),
+        ("Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"),
+        ("DefaultEndpointsProtocol=https;AccountKey=abcdEFGH1234abcdEFGH1234abcd==;", "abcdEFGH1234"),
+        ("https://x.blob.core.windows.net/c?sv=2020&sig=abcdEFGH1234%2Bxyz&se=1", "abcdEFGH1234"),
+        ("Amex 3782 822463 10005", "822463"),
+        ("card number 4111111111111111 on file", "4111111111111111"),
+    ],
+)
+def test_redact_catches(text, secret):
+    out, n = redact(text)
+    assert secret not in out and n == 1, out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the password is required for login",
+        "order 1234567812345670 shipped",  # Luhn-valid, but ungrouped and no card context
+        "tracking 4111111111111111",
+        "spin: 5, opinion: none",
+        "basic understanding of the API",
+        "call 090-1234-5678",
+    ],
+)
+def test_redact_keeps(text):
+    assert redact(text) == (text, 0)
+
+
+def test_redact_keeps_spacing_around_cards():
+    assert redact("card 4111 1111 1111 1111 exp 12/29")[0] == "card [REDACTED-CARD] exp 12/29"
 
 
 def test_rule_matching_fields():

@@ -141,7 +141,7 @@ also creates an all-commented `.env` (git-ignored in the workspace) that you can
 lines. `kbmail init --upgrade` regenerates `.env.example` and never touches `.env`.
 
 ```dotenv
-KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.co.jp
+KBMAIL_ME__EMAILS=taro.yamada@contoso.com,t.yamada@contoso.net
 KBMAIL_OUTLOOK__DAYS=60
 KBMAIL_OUTLOOK__FOLDERS=inbox,sent,Inbox/Projects
 KBMAIL_COPILOT__VISION=false
@@ -206,6 +206,13 @@ schtasks /Create /SC DAILY /ST 08:30 /TN kbmail-sync /TR "cmd /c cd /d C:\kb && 
 ```
 
 When you next open VS Code, `/kb-sync` picks up the prepared queues.
+
+`kbmail sync` exits with 1 when the Outlook, Teams or directory step fails (the other steps still
+run). `kbmail status` and the Copilot session hook then start with a warning, and also when no mail
+was exported for `sync.warn_after_days` (2) days, so a broken scheduled task doesn't go unnoticed.
+kbmail commands that change state take turns: one started while another runs (say, the scheduled
+sync) waits for it, up to 10 minutes. `kbmail review` saves each answer as you go and keeps what
+other commands write in the meantime.
 
 ## Teams
 

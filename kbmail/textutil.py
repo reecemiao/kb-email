@@ -71,17 +71,17 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 
 
 def slugify(text: str, maxlen: int = 60) -> str:
-    """Filesystem-safe slug. Keeps CJK and other letters, collapses the rest to '-'."""
+    """Filesystem-safe slug. Keeps letters and digits, collapses the rest to '-'."""
     text = unicodedata.normalize("NFKC", text or "").strip().lower()
-    text = re.sub(r"^((re|fw|fwd|aw|wg|返信|転送)\s*[:：]\s*)+", "", text, flags=re.I)
+    text = re.sub(r"^((re|fw|fwd|aw|wg)\s*:\s*)+", "", text, flags=re.I)
     text = re.sub(r"[^\w]+", "-", text, flags=re.U).strip("-_")
     return (text[:maxlen].rstrip("-_")) or "untitled"
 
 
 def normalize_subject(subject: str) -> str:
     s = unicodedata.normalize("NFKC", subject or "")
-    s = re.sub(r"^\s*((re|fw|fwd|aw|wg|返信|転送|rv)\s*(\[\d+\])?\s*[:：]\s*)+", "", s, flags=re.I)
-    s = re.sub(r"^\s*\[(ext|external|社外)\]\s*", "", s, flags=re.I)
+    s = re.sub(r"^\s*((re|fw|fwd|aw|wg|rv)\s*(\[\d+\])?\s*:\s*)+", "", s, flags=re.I)
+    s = re.sub(r"^\s*\[(ext|external)\]\s*", "", s, flags=re.I)
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
@@ -92,17 +92,17 @@ def email_domain(address: str) -> str:
 
 # ---------------------------------------------------------------- quoted text
 
-# Headers that start the quoted history of a reply/forward (English + Japanese Outlook).
+# Headers that start the quoted history of a reply/forward (Outlook, Gmail and similar).
 _QUOTE_PATTERNS = [
-    r"^[\s>*_]*-{2,}\s*(original message|forwarded message|元のメッセージ|転送されたメッセージ)\s*-{2,}",
-    r"^[\s>*_]*(from|差出人|送信者)\s*[:：][*_]*\s*.+",
+    r"^[\s>*_]*-{2,}\s*(original message|forwarded message)\s*-{2,}",
+    r"^[\s>*_]*from\s*:[*_]*\s*.+",
     r"^[\s>*_]*on .{4,200}wrote:\s*$",
     r"^[\s>*_]*_{20,}\s*$",
-    r"^[\s>*_]*\d{4}[年/-]\d{1,2}[月/-]\d{1,2}.{0,40}(wrote|書きました)[:：]?\s*$",
+    r"^[\s>*_]*\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,40}wrote:?\s*$",
 ]
 _QUOTE_RE = re.compile("|".join(f"(?:{p})" for p in _QUOTE_PATTERNS), re.I | re.M)
 # A "From:" line only counts when a Sent/Date/To header follows shortly after.
-_HEADER_FOLLOW_RE = re.compile(r"^[\s>*_]*(sent|date|to|送信日時|日時|宛先|件名|subject)\s*[:：]", re.I | re.M)
+_HEADER_FOLLOW_RE = re.compile(r"^[\s>*_]*(sent|date|to|subject)\s*:", re.I | re.M)
 
 
 def strip_quoted(body: str) -> str:
@@ -111,7 +111,7 @@ def strip_quoted(body: str) -> str:
         return ""
     for m in _QUOTE_RE.finditer(body):
         line = m.group(0)
-        if re.match(r"^[\s>*_]*(from|差出人|送信者)\s*[:：]", line, re.I):
+        if re.match(r"^[\s>*_]*from\s*:", line, re.I):
             window = body[m.end() : m.end() + 400]
             if not _HEADER_FOLLOW_RE.search(window):
                 continue
@@ -125,7 +125,7 @@ def strip_quoted(body: str) -> str:
 
 
 def compact(text: str, limit: int) -> str:
-    text = re.sub(r"[ \t　]+", " ", text or "")
+    text = re.sub(r"[ \t]+", " ", text or "")
     text = re.sub(r"\n\s*\n+", "\n", text).strip()
     if len(text) > limit:
         return text[:limit].rstrip() + " …"
@@ -134,8 +134,7 @@ def compact(text: str, limit: int) -> str:
 
 # ---------------------------------------------------------------- tokenizing / BM25
 
-_CJK = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff66-\uff9f"  # kana, CJK, hangul, half-width kana
-_TOKEN_RE = re.compile(rf"[a-z0-9][a-z0-9_.\-]*[a-z0-9]|[a-z0-9]|[{_CJK}]+", re.I)
+_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_.\-]*[a-z0-9]|[a-z0-9]", re.I)
 STOPWORDS = frozenset(
     (
         "a an the and or of to in on for with at by from is are was were be been this that it as re fw fwd "
@@ -145,18 +144,9 @@ STOPWORDS = frozenset(
 
 
 def tokenize(text: str) -> list[str]:
-    """Lowercase word tokens; CJK runs become character bigrams (Japanese has no spaces)."""
+    """Lowercase word tokens without stopwords and single characters."""
     text = unicodedata.normalize("NFKC", text or "").lower()
-    out: list[str] = []
-    for tok in _TOKEN_RE.findall(text):
-        if re.match(rf"[{_CJK}]", tok):
-            if len(tok) == 1:
-                out.append(tok)
-            else:
-                out.extend(tok[i : i + 2] for i in range(len(tok) - 1))
-        elif tok not in STOPWORDS and len(tok) > 1:
-            out.append(tok)
-    return out
+    return [tok for tok in _TOKEN_RE.findall(text) if tok not in STOPWORDS and len(tok) > 1]
 
 
 class BM25:

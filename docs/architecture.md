@@ -115,7 +115,7 @@ README.md                   workspace guide, incl. version control (what is trac
   `text/calendar` part with `METHOD:REPLY`) are not exported when they carry no comment. Not a
   comment: the copied invitation (`-----Original Appointment-----`), lines matching
   `outlook.boilerplate_lines` (classification labels such as `INTERNAL`), and a bare "Thanks" / "OK" /
-  "ありがとうございます". A response with a real comment ("Declined - on leave, please send the notes")
+  "Noted". A response with a real comment ("Declined - on leave, please send the notes")
   is exported like any mail. Who accepted or declined is kept in the calendar export: each attendee
   has a `response` (accepted / declined / tentative / organizer) for meetings you organize.
   Responses exported earlier are labeled `others` (source `noise`) by `kbmail label prepare`
@@ -138,11 +138,10 @@ support ≥ 3 and purity ≥ 0.8 among confirmed labels.
 ## Quoted history (replies and forwards)
 
 `kbmail/history.py` splits every body into its own text and the quoted messages below it: Outlook
-`From/Sent/To/Cc/Subject` blocks (English, Japanese, Chinese; also on one line, as HTML mail renders
-them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
+`From/Sent/To/Cc/Subject` blocks (also on one line, as HTML mail renders them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
 it checks whether that message is exported on its own. A match needs three things:
 - **sender:** the same e-mail address, or the same name in any order ("MORGAN, Alex" = "Alex MORGAN");
-- **time:** the quoted time ("2026年7月30日 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
+- **time:** the quoted time ("30 July 2026 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
   message's time in some time zone (whole or half hours, a few minutes' tolerance). A copy from
   another day never matches;
 - **text:** the exported message's own text is found in the quote (letters and digits only, so line
@@ -183,8 +182,7 @@ citations, supersession instead of overwrite, and the ingest/query/lint operatio
   from the index, supersession without `superseded_by`, and **stale pages**.
   Effective confidence = `confidence × 0.5^(age / half-life)` with half-lives per `decay` class
   (`wiki.half_life_days`)
-* **hybrid search**: BM25 (CJK bigram tokenization, so Japanese works without a morphological
-  analyzer) plus one-hop graph expansion, combined with reciprocal rank fusion and down-weighted by
+* **hybrid search**: BM25 plus one-hop graph expansion, combined with reciprocal rank fusion and down-weighted by
   effective confidence and supersession
 * **graph** from relations and wikilinks, with Mermaid neighbourhood rendering (`kbmail wiki graph --page ...`)
 * **audit trail** (`state/wiki_audit.jsonl`) next to the human-readable `wiki/log.md`
@@ -192,11 +190,33 @@ citations, supersession instead of overwrite, and the ingest/query/lint operatio
 Vector search is intentionally left out to avoid an embedding service. The search function is the
 place to add one (e.g. a local sentence-transformers index) if the wiki grows past a few hundred pages.
 
+## Concurrency and failures
+
+* State files are read, changed and written back whole, so two commands at once would drop each
+  other's changes. Every command that changes state holds an OS file lock on `state/.kbmail.lock`
+  (flock / msvcrt, released by the OS even after a crash; `state/.kbmail.lock.json` names the
+  holder). Others wait up to 10 minutes, then exit with 3. Read-only commands (`status`, `show`,
+  `mail`, `wiki search`, the session hook, ...) never wait.
+* The interactive `kbmail review` doesn't hold the lock for the whole session. Each answer is
+  written under the lock into a fresh copy of `labels.json`, so rule labels and Copilot proposals
+  written meanwhile are kept, and the user's confirmations are never overwritten.
+* `kbmail sync` records failed Outlook / Teams / directory steps in `state/runs.json` (`sync.problems`)
+  and exits with 1. `kbmail status` lists them first, plus a warning when the last mail export is
+  older than `sync.warn_after_days`. "Outlook not available" (not Windows) is not a failure.
+* JSON and YAML state is written to a temporary file and renamed, so a crash never leaves a
+  half-written file.
+
 ## Privacy
 
-* Redaction before raw/: passwords, API keys/tokens (AWS, GitHub, Slack, OpenAI-style, Bearer),
-  private keys, Luhn-valid card numbers, plus your own `privacy.extra_patterns`. Previews in labeling
-  and selection batches are redacted too.
+* Redaction before raw/: passwords and PINs (`password: x`, `Password is x2`, `PW: x`,
+  `Password=x;` in connection strings), API keys/tokens (AWS, GitHub, Slack,
+  OpenAI-style, Bearer, HTTP Basic), credentials in URLs (`https://user:x@host`), Azure `AccountKey`
+  and SAS `sig=`, private keys, card numbers, plus your own `privacy.extra_patterns`. Previews in
+  labeling and selection batches are redacted too. A card number must pass the Luhn check, start
+  with an issuer prefix, and be written in groups (`4111 1111 1111 1111`) or follow a word such as
+  "card": a bare run of digits passes the Luhn check one time in ten, and order or
+  tracking numbers are knowledge worth keeping. After "is", only a value with a digit or
+  symbol counts as a password, so "the password is required" keeps its text.
 * Copilot instructions forbid sending content to external services and storing non-work personal data.
 * The MSAL token cache (Teams) is git-ignored in the workspace.
 * `kbmail` never sends mail. `draft-outlook` only saves to Drafts.

@@ -12,9 +12,8 @@ from kbmail.textutil import BM25, compact, now_iso, parse_dt, strip_quoted
 from kbmail.workspace import OTHERS, Workspace
 
 REQUEST_RE = re.compile(
-    r"\?|？|\b(please|could you|can you|would you|let me know|kindly|need your|action required"
-    r"|by (mon|tue|wed|thu|fri|eod|end of))"
-    r"|お願い|ください|下さい|いただけ|頂け|ご確認|ご検討|ご連絡|いかがでしょう|でしょうか|ますか",
+    r"\?|\b(please|could you|can you|would you|let me know|kindly|need your|action required"
+    r"|by (mon|tue|wed|thu|fri|eod|end of))",
     re.I,
 )
 

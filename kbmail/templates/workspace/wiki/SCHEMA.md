@@ -53,7 +53,7 @@ Otherwise mention it on the closest existing page. Prefer updating over creating
 ---
 title: Payment API migration
 type: project                # see section 3
-aliases: [PAYMIG, 決済API移行]
+aliases: [PAYMIG, payments migration]
 areas: [area1]
 status: active               # active | stale | superseded | archived
 confidence: 0.8              # 0-1, see section 5

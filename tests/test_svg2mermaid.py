@@ -21,7 +21,7 @@ FLOW = """<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300">
   <rect x="220" y="0" width="120" height="50"/>
   <text x="280" y="22" text-anchor="middle"><tspan x="280">API</tspan><tspan x="280" dy="14">Gateway</tspan></text>
   <polygon points="470,0 530,25 470,50 410,25"/><text x="470" y="30" text-anchor="middle">Valid?</text>
-  <ellipse cx="470" cy="170" rx="60" ry="25"/><text x="470" y="175" text-anchor="middle">注文DB</text>
+  <ellipse cx="470" cy="170" rx="60" ry="25"/><text x="470" y="175" text-anchor="middle">OrdersDB</text>
   <line x1="120" y1="25" x2="220" y2="25" marker-end="url(#a)"/>
   <text x="170" y="18" text-anchor="middle">HTTPS</text>
   <line x1="340" y1="25" x2="410" y2="25" marker-end="url(#a)"/>
@@ -83,7 +83,7 @@ def test_simple_flowchart_with_transforms_labels_and_markers():
     assert r.kind == "simple" and (r.nodes, r.edges) == (4, 3)
     m = r.mermaid
     assert 'title: "Order flow"' in m and "flowchart LR" in m
-    assert 'n1("Client")' in m and 'n2["API<br/>Gateway"]' in m and 'n3{"Valid?"}' in m and 'n4(["注文DB"])' in m
+    assert 'n1("Client")' in m and 'n2["API<br/>Gateway"]' in m and 'n3{"Valid?"}' in m and 'n4(["OrdersDB"])' in m
     assert 'n1 -->|"HTTPS"| n2' in m and "n2 --> n3" in m and "n3 -.-> n4" in m
 
 

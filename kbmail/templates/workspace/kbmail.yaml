@@ -51,6 +51,11 @@ copilot:
 images:
   min_bytes: 6000          # ignore smaller images (logos, signature icons)
 
+convert:
+  sniff_content: false     # true: markitdown detects file types from content (magika/onnxruntime). Off
+                           # because onnxruntime can crash (0xC0000005) where security software loads an
+                           # old msvcp140.dll into every process; the file extension is enough.
+
 privacy:
   redact: true             # strip passwords/tokens/keys before raw/ and wiki/
   extra_patterns: []       # extra regexes to redact, e.g. ["\\bPRJ-SECRET-\\d+\\b"]

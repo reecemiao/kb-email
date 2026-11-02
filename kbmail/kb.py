@@ -27,6 +27,7 @@ from kbmail.convert import (
     html_to_markdown,
     office_media,
 )
+from kbmail.convert import session as convert_session
 from kbmail.history import History
 from kbmail.labels import load_labels
 from kbmail.records import fmt_people, fmt_person, message_index, read_message, threads
@@ -294,6 +295,11 @@ def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, quoting: dict,
 
 
 def convert(ws: Workspace, force: bool = False, log=print) -> dict:
+    with convert_session(ws, log):
+        return _convert(ws, force, log)
+
+
+def _convert(ws: Workspace, force: bool, log) -> dict:
     sel = ws.load_json(SELECTION, {})
     conv = ws.load_json(CONVERTED, {})
     reg = imgs.load(ws)
@@ -348,6 +354,10 @@ def convert(ws: Workspace, force: bool = False, log=print) -> dict:
             "formatted": False,
         }
         stats["converted"] += 1
+        # Save after every thread: a native crash in a converter kills the process without cleanup, and
+        # the next run should resume here instead of starting over.
+        imgs.save(ws, reg)
+        ws.save_json(CONVERTED, conv)
     imgs.process_svgs(ws, reg, log=log)
     imgs.save(ws, reg)
     imgs.write_review_files(ws, reg)

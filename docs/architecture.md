@@ -177,6 +177,13 @@ resolved only when those are too.
 `thread.md` is re-rendered whenever image descriptions change. A thread is "formatted" when its raw
 file's front matter carries the current `source_version`.
 
+markitdown runs with content sniffing (magika/onnxruntime) off unless `convert.sniff_content` is
+true. The extension is always known, and onnxruntime crashes where security software has loaded an
+old `msvcp140.dll`. Conversion runs (`kb convert`, `raw import`, link fetching) enable faulthandler and
+record the file in progress in `state/convert_crash.json`. A native crash leaves that entry
+behind, and later runs skip the file. `kb convert` saves `kb_convert.json` after every thread, so a
+crash loses at most the thread in progress.
+
 ## Wiki (LLM Wiki v2)
 
 `wiki/SCHEMA.md` is the contract: page types, memory tiers (episodic → semantic → procedural), front

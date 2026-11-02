@@ -13,7 +13,7 @@ harnesses, in GitHub Copilot CLI, and largely in other skills-compatible agents.
 | `.github/skills/*/…` resources | `raw-template.md`, `draft-template.md`, `rules-format.md` | loaded only when the skill reaches that step |
 | `.github/skills/kbmail-cli/` | CLI reference | `user-invocable: false`: hidden from `/`, loaded when the model needs a command |
 | `.github/agents/kb-librarian.agent.md` | **KB Librarian** custom agent | tools `read, edit, search, execute, todo, agent, askQuestions`, **no `web`**; handoff buttons (Local) for sync, wiki update, what needs a reply |
-| `.github/hooks/kbmail.json` | `sessionStart` hook → `kbmail hook session-start` | injects `kbmail status` (counts + ordered next actions) as context; fails open |
+| `.github/hooks/kbmail.json` | `sessionStart` hook → `kbmail hook session-start` | injects `kbmail status` (counts + ordered next actions, warnings about failed or stale exports first) as context; fails open |
 | `.github/instructions/*.instructions.md` | `applyTo: raw/**` / `wiki/**` rules | attached automatically when those files are edited |
 | `.vscode/settings.json` | `chat.useHooks` (Local), terminal auto-approve for `kbmail` | remove the auto-approve entry to confirm every command |
 
@@ -108,7 +108,8 @@ knowledge base never contains silent "[image]" holes.
 
 The deterministic half is a CLI, so it can be scheduled (see the README for Task Scheduler). The LLM
 half is defined by skills and file contracts, which GitHub Copilot CLI also reads from the workspace.
-For example, after a scheduled `kbmail sync`, a non-interactive Copilot CLI run can execute
+For example, after a scheduled `kbmail sync` that exited with 0 (1 means an export step failed,
+3 that another kbmail command was running), a non-interactive Copilot CLI run can execute
 `/kb-label` with tool permissions limited to `kbmail` and file edits in the workspace. The GitHub
 Copilot SDK can drive the same loop from Python. Check your organization's Copilot policies first,
 and keep the human steps (`kbmail review`, images, questions) interactive.

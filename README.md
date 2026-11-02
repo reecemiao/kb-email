@@ -56,7 +56,9 @@ Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords, `copi
 walks you through the first run.
 
 Requirements: Python 3.12+, classic Outlook desktop (the new WebView-based Outlook has no COM API),
-current VS Code with GitHub Copilot. Skills, the custom agent and `AGENTS.md` are picked up
+current VS Code with GitHub Copilot. Mail content is expected in English; headers and dates that
+English or Simplified Chinese Outlook, Gmail and Teams write (`发件人`/`发送时间`, `2026年7月30日 下午3:48`,
+`答复:`/`转发:`, `已接受:`) are recognized. Skills, the custom agent and `AGENTS.md` are picked up
 automatically, and the hook needs `kbmail` on PATH. The workspace is separate from this repo, so your
 mail never ends up in the tool's git history.
 Version the workspace in a *private* repo if you like; that also gives the wiki a full audit history.
@@ -208,7 +210,7 @@ schtasks /Create /SC DAILY /ST 08:30 /TN kbmail-sync /TR "cmd /c cd /d C:\kb && 
 When you next open VS Code, `/kb-sync` picks up the prepared queues.
 
 `kbmail sync` exits with 1 when the Outlook, Teams or directory step fails (the other steps still
-run). `kbmail status` and the Copilot session hook then start with a warning, and also when no mail
+run; Task Scheduler shows "Last Run Result" 0x1, and 0x3 when another kbmail command kept it waiting). `kbmail status` and the Copilot session hook then start with a warning, and also when no mail
 was exported for `sync.warn_after_days` (2) days, so a broken scheduled task doesn't go unnoticed.
 kbmail commands that change state take turns: one started while another runs (say, the scheduled
 sync) waits for it, up to 10 minutes. `kbmail review` saves each answer as you go and keeps what
@@ -258,7 +260,10 @@ Add dependencies with `uv add <pkg>` (or `uv add --group dev <pkg>`) so `uv.lock
 The tests run the whole pipeline on generated `.eml` files. They write the result files Copilot
 would write, then check export de-duplication, labeling import, interactive review, rule
 validation/evaluation/snapshots, KB selection with questions, markitdown conversion (HTML tables,
-docx, inline images, SVG), redaction, quoted history (forwards keep what they forward, exported
-originals become pointers), image description flow, wiki delta queue with diffs, lint/decay, hybrid search, people statistics and triage. The pywin32 exporter is tested against
-a fake Outlook object model. Real Outlook and the Graph (Teams) calls need Windows and a tenant, so test
+docx, inline images, SVG), redaction, quoted history in English and Simplified Chinese headers
+(forwards keep what they forward, exported originals become pointers), image description flow, wiki
+delta queue with diffs, lint/decay, hybrid search, people statistics and triage. They also check that
+commands wait for each other (the workspace lock), that `kbmail review` keeps what a sync writes
+meanwhile, and that a failed or stale export shows up in `kbmail status`. The pywin32 exporter is
+tested against a fake Outlook object model. Real Outlook and the Graph (Teams) calls need Windows and a tenant, so test
 those on your machine.

@@ -57,7 +57,9 @@ state/                      kbmail-owned state (JSON)
   wiki_snapshots/           ingested copy of each raw file (for diffs)
   wiki_graph.json           typed graph (front-matter relations + wikilinks)
   wiki_audit.jsonl          ingest/update/forget log
-  runs.json                 last run + history of every step (drives "due" logic)
+  runs.json                 last run + history of every step (drives "due" logic; sync.problems)
+  history.json              quoted-history fingerprints per message
+  .kbmail.lock(.json)       workspace lock and who holds it (see Concurrency and failures)
 work/                       generated queues for Copilot
   labeling/batch_NNN.md (+ .result.jsonl)
   rules/RULES_CONTEXT.md

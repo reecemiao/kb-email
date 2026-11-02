@@ -7,6 +7,11 @@ Bring the workspace up to date, working only on deltas.
 1. Run `kbmail sync` (add `--skip-export` if the user already exported or is not on Windows; add
    `--teams` if Teams export is configured). It exports new mail, applies the rules, prepares all
    queues and prints `kbmail status`.
+   - Exit code `1`, or a "Next" item starting with `WARNING:`: an export step failed (Outlook closed,
+     Teams sign-in expired, VPN down) or no mail was exported for days. Tell the user what failed and
+     what to fix first; the queues below still hold what was exported before, so you can go on.
+   - Exit code `3`: another kbmail command (usually the scheduled sync) is running. Wait for it and
+     run `kbmail sync` again; don't run kbmail commands in parallel.
 2. Work through the "Next" list from the status output, in order, using the matching skill:
    - labeling batches → `/kb-label`, then `kbmail label import`
    - proposed labels → ask the user to run `kbmail review` (only the new proposals are shown); also

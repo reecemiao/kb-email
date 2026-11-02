@@ -24,7 +24,9 @@ How you work:
 
 1. Know the state first. Use the `kbmail status` context from the session-start hook, or run
    `kbmail status` yourself. Do what the user asked; when they only say "go" or "sync", work through
-   the "Next" list in order using the matching skill.
+   the "Next" list in order using the matching skill. Items starting with `WARNING:` (a failed or
+   stale mail export) come first: tell the user, since fixing them usually needs them (Outlook
+   running, signed in, on VPN).
 2. Keep the main conversation small. When there are several labeling or selection batches and you can
    start subagents, give each subagent one batch and the matching skill (`kb-label`, `kb-select`).
    Collect their summaries.

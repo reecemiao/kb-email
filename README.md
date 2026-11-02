@@ -112,9 +112,19 @@ extension, so onnxruntime is never loaded. Run `git pull` and convert again.
 If a crash still happens, the run prints a Python stack (`Windows fatal exception: access violation`)
 that names the converter. Threads converted before the crash are kept. The next run warns about the
 file it crashed on and skips it from then on. The skipped files are listed in
-`state/convert_crash.json`; remove an entry there to retry that file. A permanent fix is to install
-the current [Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist),
-or to ask IT to update the security product or exclude Python from its injection.
+`state/convert_crash.json`; remove an entry there to retry that file.
+
+To confirm the cause, run `python -c "import onnxruntime"`. If that alone crashes, the conflict is
+not in kbmail or in your mail. Updating the [Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)
+only helps if the copy in `C:\Windows\System32` is the old one; the event names the module's path.
+If it names a copy under the security product's folder (for example
+`C:\Program Files\McAfee\Endpoint Security\Threat Prevention\MSVCP140.dll`, version 14.0.24210),
+that copy is loaded first and wins. Don't replace or delete it, and don't turn off endpoint protection.
+Give IT the Application event (ID 1000) with the module path, versions and fault offset, and let
+them fix it through the vendor.
+
+Among kbmail's dependencies, only onnxruntime loads the shared `MSVCP140.dll`. numpy and pandas ship
+their own renamed copies, and pywin32's MAPI extension, which also uses it, isn't used by kbmail.
 
 ## Version control (GitHub)
 

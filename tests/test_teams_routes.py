@@ -105,6 +105,9 @@ def test_parse_pasted_chat_formats():
     iso = "[2026/10/27 9:30] Hanako Sato: Checked the billing cutover\n[2026-10-27 1:05 PM] Taro Yamada: Thanks"
     m = teams.parse_pasted_chat(iso, fb)
     assert m[0]["name"] == "Hanako Sato" and m[1]["time"].startswith("2026-10-27T13:05")
+    zh = "[2026年10月27日 上午 9:30] Hanako Sato: Checked the cutover\n[2026/10/27 下午1:05] Taro Yamada: Thanks"
+    m = teams.parse_pasted_chat(zh, fb)
+    assert m[0]["time"].startswith("2026-10-27T09:30") and m[1]["time"].startswith("2026-10-27T13:05")
     plain = teams.parse_pasted_chat("just some notes\nwithout headers", fb)
     assert len(plain) == 1 and plain[0]["name"] == "(unknown)"
 

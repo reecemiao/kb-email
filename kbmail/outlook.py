@@ -43,6 +43,15 @@ SKIP_FOLDER_NAMES = {
     "conversation history",
     "rss feeds",
     "rss subscriptions",
+    # Simplified Chinese Outlook
+    "已删除邮件",
+    "垃圾邮件",
+    "发件箱",
+    "草稿",
+    "同步问题",
+    "对话历史记录",
+    "rss 源",
+    "rss 订阅",
 }
 
 EXPORT_STATE = "state/export_state.json"

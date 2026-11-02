@@ -147,3 +147,50 @@ def test_split_formats_and_dates():
     assert parse_loose_dt("07/08/2026 10:00") == [datetime(2026, 8, 7, 10, 0), datetime(2026, 7, 8, 10, 0)]
     assert parse_loose_dt("30 July 2026 15:48") == [datetime(2026, 7, 30, 15, 48)]
     assert parse_loose_dt("Monday") == []
+
+
+# ---------------------------------------------------------------- Simplified Chinese clients
+
+
+def _fw_body_zh(colon: str) -> str:
+    """A forward from Simplified Chinese Outlook: 发件人 / 发送时间 / 收件人 / 主题 headers."""
+    return (
+        "FYI.\n\n"
+        f"发件人{colon} Alex MORGAN <alex@corp.example>\n"
+        f"发送时间{colon} 2026年7月30日 星期四 下午 3:48\n"
+        f"收件人{colon} Chris LEE <chris@corp.example>\n"
+        f"主题{colon} RE: APP.PLATFORM\n\n" + DAN
+    )
+
+
+def test_chinese_outlook_forward_points_to_exported_original(ws, tmp_path):
+    d = _mailbox(tmp_path / "eml", with_original=True)
+    make_eml(
+        d / "3.eml",
+        subject="转发: APP.PLATFORM",
+        frm="Chris LEE <chris@corp.example>",
+        to=["taro@contoso.com"],
+        date=ORIG + timedelta(days=50),
+        body=_fw_body_zh("\uff1a"),  # full-width colon, as Chinese Outlook writes it
+    )
+    import_eml(ws, [str(d)], log=quiet)
+    msgs = _by_subject(ws)
+    zh = msgs["转发: APP.PLATFORM"]
+    orig = max((r for r in message_index(ws).all() if r["subject"] == "RE: APP.PLATFORM"), key=lambda r: r["date"])
+    own, segs = split(ws.path(zh["path"]).read_text(encoding="utf-8").split("---", 2)[2])
+    assert own.strip() == "FYI." and segs[0].sender["email"] == "alex@corp.example"
+    assert segs[0].dates == [datetime(2026, 7, 30, 15, 48)]
+    assert History(ws).match(segs[0], exclude=zh["id"]) == orig["id"]  # 15:48 at UTC+8 = the exported 07:48 UTC
+
+
+def test_split_simplified_chinese_formats():
+    own, segs = split(_fw_body_zh(":"))
+    assert own == "FYI." and segs[0].subject == "RE: APP.PLATFORM" and segs[0].text.startswith("Hi Chris")
+    own, segs = split("Thanks\n\n2026年7月30日周四 15:48\uff0cDan <dan@x.com> 写道\uff1a\n> line1\n")
+    assert own == "Thanks" and segs[0].sender["email"] == "dan@x.com" and segs[0].text == "line1"
+    assert segs[0].dates == [datetime(2026, 7, 30, 15, 48)]
+    own, segs = split("See below.\n\n-----原始邮件-----\n发件人: Bob <b@x.com>\n发送时间: 2026年7月27日 13:00\n\nold")
+    assert own == "See below." and segs[0].sender["email"] == "b@x.com"
+    assert parse_loose_dt("2026年7月30日 星期四 下午3:48") == [datetime(2026, 7, 30, 15, 48)]
+    assert parse_loose_dt("2026年7月30日(周四) 上午9:05") == [datetime(2026, 7, 30, 9, 5)]
+    assert parse_loose_dt("2026年7月30日 15:48") == [datetime(2026, 7, 30, 15, 48)]

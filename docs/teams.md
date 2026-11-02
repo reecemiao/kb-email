@@ -89,8 +89,8 @@ kbmail teams import-text "C:\kb\raw\inbox\Payment cut-over.txt"      # title = f
 ```
 
 The parser understands the common copy formats: `[10/27/2026 9:30 AM] Name: text`,
-`Name` / `time` / `text` on separate lines, and ISO-style dates (`2026/10/27 9:30`). Text it can't split
-becomes one message. Speakers are matched to email addresses already seen in your mail, so people
+`Name` / `time` / `text` on separate lines, ISO-style dates (`2026/10/27 9:30`), and Chinese
+dates and times (`2026年10月27日 下午 1:05`). Text it can't split becomes one message. Speakers are matched to email addresses already seen in your mail, so people
 inference links them up. Re-importing the same paste (or an overlapping one) doesn't create
 duplicates.
 

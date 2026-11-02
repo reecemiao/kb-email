@@ -16,11 +16,11 @@ from kbmail.workspace import Workspace
 # Outlook: IPM.Schedule.Meeting.Resp.Pos / .Neg / .Tent, and "X forwarded your meeting" notifications.
 RESPONSE_CLASSES = ("ipm.schedule.meeting.resp", "ipm.schedule.meeting.notification.forward")
 RESPONSE_SUBJECT_RE = re.compile(
-    r"^\s*(accepted|declined|tentative|tentatively accepted)\s*:",
+    r"^\s*(accepted|declined|tentative|tentatively accepted|已接受|已拒绝|暂定|暂时接受)\s*[:\uff1a]",
     re.I,
 )
 # Text a response may carry that is not a comment: the copied invitation, join links, sign-offs.
-_INVITE_RE = re.compile(r"^[\s>*_]*(-{2,}\s*(original appointment)\s*-{2,}|_{20,})\s*$", re.I | re.M)
+_INVITE_RE = re.compile(r"^[\s>*_]*(-{2,}\s*(original appointment|原始约会)\s*-{2,}|_{20,})\s*$", re.I | re.M)
 
 
 def _norm(text: str) -> str:

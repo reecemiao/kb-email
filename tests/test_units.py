@@ -21,7 +21,15 @@ def test_tokenize():
     assert tokenize("The billing system migration v2.1") == ["billing", "system", "migration", "v2.1"]
 
 
+def test_strip_quoted_simplified_chinese():
+    zh = "Done.\n\n发件人\uff1a Wang Wei\n发送时间\uff1a 2026年10月1日 13:05\n收件人\uff1a Taro\n\nold text"
+    assert strip_quoted(zh) == "Done."
+    assert strip_quoted("OK\n\n2026年10月1日周四 13:05\uff0cWang Wei <w@x.com> 写道\uff1a\n> old") == "OK"
+
+
 def test_normalize_subject():
+    assert normalize_subject("答复: 转发\uff1a Budget") == "budget"
+
     assert normalize_subject("RE: Fw: AW: [EXT] Budget") == "budget"
 
 

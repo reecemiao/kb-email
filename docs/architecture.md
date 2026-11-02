@@ -111,9 +111,10 @@ README.md                   workspace guide, incl. version control (what is trac
 * Defaults: Inbox + Sent Items, no subfolders. `--include-subfolders`, `--all-folders` (every mail
   folder in the default store except Deleted/Junk/Outbox/Drafts/Sync Issues), `--folder` (repeatable;
   `inbox`, `sent`, `Inbox/Sub/Folder`, or `\\Store Name\Folder`), `outlook.extra_folders` for archives.
-* Meeting responses (`IPM.Schedule.Meeting.Resp.*`, "X forwarded your meeting"; in `.eml` files a
+* Meeting responses (`IPM.Schedule.Meeting.Resp.*`, "X forwarded your meeting", subjects such as
+  `Accepted:` or `已接受:` / `已拒绝:` / `暂定:`; in `.eml` files a
   `text/calendar` part with `METHOD:REPLY`) are not exported when they carry no comment. Not a
-  comment: the copied invitation (`-----Original Appointment-----`), lines matching
+  comment: the copied invitation (`-----Original Appointment-----` / `-----原始约会-----`), lines matching
   `outlook.boilerplate_lines` (classification labels such as `INTERNAL`), and a bare "Thanks" / "OK" /
   "Noted". A response with a real comment ("Declined - on leave, please send the notes")
   is exported like any mail. Who accepted or declined is kept in the calendar export: each attendee
@@ -138,10 +139,13 @@ support ≥ 3 and purity ≥ 0.8 among confirmed labels.
 ## Quoted history (replies and forwards)
 
 `kbmail/history.py` splits every body into its own text and the quoted messages below it: Outlook
-`From/Sent/To/Cc/Subject` blocks (also on one line, as HTML mail renders them), `-----Original Message-----`, and `On ... wrote:` with `>` quoting. For each quoted message
-it checks whether that message is exported on its own. A match needs three things:
+`From/Sent/To/Cc/Subject` blocks (English or Simplified Chinese clients:
+`发件人/发送时间/收件人/抄送/主题`, with `:` or the full-width `：`; also on one line, as HTML mail
+renders them), `-----Original Message-----` / `-----原始邮件-----`, and `On ... wrote:` /
+`... 写道:` with `>` quoting. For each quoted message it checks whether that message is exported on its own. A match needs three things:
 - **sender:** the same e-mail address, or the same name in any order ("MORGAN, Alex" = "Alex MORGAN");
-- **time:** the quoted time ("30 July 2026 15:48", "Thursday, July 30, 2026 3:48 PM") is the exported
+- **time:** the quoted time ("30 July 2026 15:48", "Thursday, July 30, 2026 3:48 PM",
+  "2026年7月30日 星期四 下午3:48") is the exported
   message's time in some time zone (whole or half hours, a few minutes' tolerance). A copy from
   another day never matches;
 - **text:** the exported message's own text is found in the quote (letters and digits only, so line

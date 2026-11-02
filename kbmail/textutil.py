@@ -73,14 +73,15 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 def slugify(text: str, maxlen: int = 60) -> str:
     """Filesystem-safe slug. Keeps letters and digits, collapses the rest to '-'."""
     text = unicodedata.normalize("NFKC", text or "").strip().lower()
-    text = re.sub(r"^((re|fw|fwd|aw|wg)\s*:\s*)+", "", text, flags=re.I)
+    text = re.sub(r"^((re|fw|fwd|aw|wg|答复|回复|转发)\s*[:\uff1a]\s*)+", "", text, flags=re.I)
     text = re.sub(r"[^\w]+", "-", text, flags=re.U).strip("-_")
     return (text[:maxlen].rstrip("-_")) or "untitled"
 
 
 def normalize_subject(subject: str) -> str:
     s = unicodedata.normalize("NFKC", subject or "")
-    s = re.sub(r"^\s*((re|fw|fwd|aw|wg|rv)\s*(\[\d+\])?\s*:\s*)+", "", s, flags=re.I)
+    # Simplified Chinese Outlook: 答复 (reply), 转发 (forward); other clients: 回复
+    s = re.sub(r"^\s*((re|fw|fwd|aw|wg|rv|答复|回复|转发)\s*(\[\d+\])?\s*[:\uff1a]\s*)+", "", s, flags=re.I)
     s = re.sub(r"^\s*\[(ext|external)\]\s*", "", s, flags=re.I)
     return re.sub(r"\s+", " ", s).strip().lower()
 
@@ -92,17 +93,20 @@ def email_domain(address: str) -> str:
 
 # ---------------------------------------------------------------- quoted text
 
-# Headers that start the quoted history of a reply/forward (Outlook, Gmail and similar).
+# Headers that start the quoted history of a reply/forward (Outlook, Gmail and similar; English and
+# Simplified Chinese clients, which may use the full-width colon U+FF1A).
 _QUOTE_PATTERNS = [
-    r"^[\s>*_]*-{2,}\s*(original message|forwarded message)\s*-{2,}",
-    r"^[\s>*_]*from\s*:[*_]*\s*.+",
+    r"^[\s>*_]*-{2,}\s*(original message|forwarded message|原始邮件|转发的邮件)\s*-{2,}",
+    r"^[\s>*_]*(from|发件人)\s*[:\uff1a][*_]*\s*.+",
     r"^[\s>*_]*on .{4,200}wrote:\s*$",
     r"^[\s>*_]*_{20,}\s*$",
-    r"^[\s>*_]*\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,40}wrote:?\s*$",
+    r"^[\s>*_]*\d{4}[年/-]\d{1,2}[月/-]\d{1,2}.{0,80}(wrote|写道)[:\uff1a]?\s*$",
 ]
 _QUOTE_RE = re.compile("|".join(f"(?:{p})" for p in _QUOTE_PATTERNS), re.I | re.M)
 # A "From:" line only counts when a Sent/Date/To header follows shortly after.
-_HEADER_FOLLOW_RE = re.compile(r"^[\s>*_]*(sent|date|to|subject)\s*:", re.I | re.M)
+_HEADER_FOLLOW_RE = re.compile(
+    r"^[\s>*_]*(sent|date|to|subject|发送时间|日期|时间|收件人|主题)\s*[:\uff1a]", re.I | re.M
+)
 
 
 def strip_quoted(body: str) -> str:
@@ -111,7 +115,7 @@ def strip_quoted(body: str) -> str:
         return ""
     for m in _QUOTE_RE.finditer(body):
         line = m.group(0)
-        if re.match(r"^[\s>*_]*from\s*:", line, re.I):
+        if re.match(r"^[\s>*_]*(from|发件人)\s*[:\uff1a]", line, re.I):
             window = body[m.end() : m.end() + 400]
             if not _HEADER_FOLLOW_RE.search(window):
                 continue

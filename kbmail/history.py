@@ -30,28 +30,38 @@ _VERSION = 1
 
 # ---------------------------------------------------------------- parsing
 
+# Header names as English and Simplified Chinese Outlook write them (发件人: / 发送时间: / 收件人: ...).
+# Chinese clients often use the full-width colon (U+FF1A) and comma (U+FF0C).
+_COLON = "[:\uff1a]"
+_COMMA = "[,\uff0c]"
 _FIELDS = {
-    "from": "from",
-    "sent": "sent|date",
-    "to": "to",
-    "cc": "cc|bcc",
-    "subject": "subject",
-    "other": "importance|attachments",
+    "from": "from|发件人",
+    "sent": "sent|date|发送时间|发送日期|日期|时间",
+    "to": "to|收件人",
+    "cc": "cc|bcc|抄送|密送",
+    "subject": "subject|主题",
+    "other": "importance|attachments|重要性|附件",
 }
 _FIELD_RE = re.compile(
-    r"^[\s>*_]*(?P<k>" + "|".join(f"(?P<{k}>{v})" for k, v in _FIELDS.items()) + r")\s*[*_]*\s*:\s*[*_]*\s*(?P<v>.*)$",
+    r"^[\s>*_]*(?P<k>"
+    + "|".join(f"(?P<{k}>{v})" for k, v in _FIELDS.items())
+    + rf")\s*[*_]*\s*{_COLON}\s*[*_]*\s*(?P<v>.*)$",
     re.I,
 )
 _INLINE_FIELD_RE = re.compile(
-    r"\s+(?=[*_]*(?:" + "|".join(_FIELDS[k] for k in ("sent", "to", "cc", "subject")) + r")[*_]*\s*:)", re.I
+    r"\s+(?=[*_]*(?:" + "|".join(_FIELDS[k] for k in ("sent", "to", "cc", "subject")) + rf")[*_]*\s*{_COLON})", re.I
 )
 _SEPARATOR_RE = re.compile(
-    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|original appointment)\s*-{2,}|_{20,})\s*$",
+    r"^[\s>*_]*(?:-{2,}\s*(?:original message|forwarded message|original appointment|"
+    r"原始邮件|转发的邮件|原始约会)\s*-{2,}|_{20,})\s*$",
     re.I,
 )
+# "On ... wrote:", and Gmail's dated forms: "2026-07-30 15:48 Dan <d@x> wrote:",
+# "2026年7月30日周四 15:48, Dan <d@x> 写道:" (often with the full-width comma and colon).
+_DAY = r"\d{4}[年/-]\d{1,2}[月/-]\d{1,2}"
 _WROTE_RE = re.compile(
-    r"^[\s>*_]*(?:on .{4,200}wrote:|\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,80}wrote:?|"
-    r"\d{4}[/-]\d{1,2}[/-]\d{1,2}.{0,80}<[^>]+@[^>]+>\s*:)\s*$",
+    rf"^[\s>*_]*(?:on .{{4,200}}wrote:|{_DAY}.{{0,80}}(?:wrote|写道){_COLON}?|"
+    rf"{_DAY}.{{0,80}}<[^>]+@[^>]+>\s*{_COLON})\s*$",
     re.I,
 )
 EMAIL_RE = re.compile(r"[\w.+'-]+@[\w-]+(?:\.[\w-]+)+")
@@ -134,7 +144,7 @@ def _split_inline_header(line: str) -> list[str]:
 
 def _wrote_header(line: str) -> dict:
     p = _person(line)
-    m = re.search(r",\s*([^,<]+?)\s*(?:<[^>]*>)?\s*(?:wrote)?\s*:?\s*$", line)
+    m = re.search(rf"{_COMMA}\s*([^,\uff0c<]+?)\s*(?:<[^>]*>)?\s*(?:wrote|写道)?\s*{_COLON}?\s*$", line)
     name = "" if p["email"] or not m else m.group(1).strip()
     return {"from": "", "sender": {"name": name, "email": p["email"]}, "sent": line}
 
@@ -188,15 +198,22 @@ def _tidy(text: str) -> str:
 # ---------------------------------------------------------------- dates
 
 _MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
-_WEEKDAY_RE = re.compile(r"(?i)\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?")
+_WEEKDAY_RE = re.compile(r"(?i)\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?|\(?(?:星期|礼拜|周)[一二三四五六日天]\)?")
 
 
 def parse_loose_dt(text: str) -> list[datetime]:
-    """Dates as shown in quoted headers ('Thursday, July 30, 2026 3:48 PM', '30 July 2026 15:48').
+    """Dates as shown in quoted headers ('Thursday, July 30, 2026 3:48 PM', '30 July 2026 15:48',
+    '2026年7月30日 星期四 下午3:48').
 
     Returns naive local times; two candidates when day and month are ambiguous (07/08/2026)."""
     s = unicodedata.normalize("NFKC", text or "")
+    s = re.sub(  # 上午/下午 (AM/PM) come before the time in Chinese
+        r"(上午|下午|早上|中午|晚上)\s*(\d{1,2}:\d{2})",
+        lambda m: f"{m.group(2)} " + ("AM" if m.group(1) in ("上午", "早上") else "PM"),
+        s,
+    )
     s = _WEEKDAY_RE.sub(" ", s)
+    s = re.sub(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", r"\1-\2-\3 ", s)
     s = re.sub(r"\bat\b|,", " ", s, flags=re.I)
     tm = re.search(r"(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap])?\.?\s*m?\.?", s, re.I)
     if not tm:

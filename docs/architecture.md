@@ -64,7 +64,7 @@ work/                       generated queues for Copilot
   labeling/batch_NNN.md (+ .result.jsonl)
   rules/RULES_CONTEXT.md
   kb_select/batch_NNN.md (+ .result.jsonl)
-  convert/<thread>/thread.src.md, thread.md, QUEUE.md
+  convert/<thread>/thread.src.md, thread.md, summary.md (Copilot), QUEUE.md
   wiki/QUEUE.md, LINT.md
   people/PEOPLE_DIGEST.md, triage/TRIAGE.md, style/SAMPLES.md
 review/                     things for the human
@@ -127,12 +127,37 @@ README.md                   workspace guide, incl. version control (what is trac
 
 ## Labeling and rules
 
-Labels have a status: `proposed` (Copilot), `auto` (rules), `confirmed` (you). Confirmed labels are
-never overwritten. Rules (`config/rules.yaml`) are weighted conditions on sender, domains,
+Labels have a status: `proposed` (Copilot), `auto` (rules, or the thread), `confirmed` (you).
+Confirmed labels are never overwritten. Rules (`config/rules.yaml`) are weighted conditions on sender, domains,
 participants, subject/body (substring or `re:` regex), folder, direction, categories and attachment
 names. An area is assigned when the summed weight reaches the threshold, and several areas can match.
 When rules change, `auto` labels are re-evaluated, and mail that no rule covers any more goes back to
 the Copilot queue.
+
+Thread labels (`labeling.inherit_thread`, on by default): before `kbmail label prepare` writes batches,
+unlabeled mail in a thread whose confirmed labels all agree gets those labels (`auto`, source
+`thread`). Only threads with a real conversation id count (Outlook ConversationID, `References` in
+`.eml`): grouping by subject alone can join unrelated mail, and a Teams chat covers many topics over
+its days. Rule labels and Copilot proposals are left alone. Thread labels are recomputed on every
+run: they follow when you change the confirmed labels, and go back to the Copilot queue when the
+thread's confirmed labels stop agreeing. Rule evaluation only uses confirmed labels, so thread labels
+never count as ground truth.
+
+## Boilerplate cleanup
+
+`kbmail/noise.py` `strip_boilerplate()` runs on mail text before it goes into labeling and selection
+batches, `kbmail review`, and the converted thread (so into `raw/`). It removes:
+- the signature block after a closing ("Best regards,", "Thanks, Sarah", an RFC 3676 `-- ` line),
+  keeping the closing and the name;
+- paragraphs that are legal disclaimers, "this email originated from outside the organization"
+  banners, "consider the environment before printing", and anything matching `cleanup.extra_patterns`;
+- Teams / Zoom / Webex / Google Meet join blocks (join links, meeting ids, passcodes, dial-in numbers);
+- whole lines matching `outlook.boilerplate_lines` (classification labels).
+
+Each part between quoted-history markers is cleaned on its own. It errs on the side of keeping
+text: a closing on the first line ("Thanks! Here is ...") is content, and the block after a closing
+is kept when it has a P.S., a line over 100 characters, or more than 10 lines. Turn it off with
+`cleanup.boilerplate: false`.
 
 `kbmail rules evaluate` measures the rules against confirmed labels (per-area precision/recall,
 coverage, accuracy, list of mistakes). `kbmail rules prepare` adds mined signals: features with
@@ -176,6 +201,19 @@ decompressed. Embedded `data:` images are extracted into the image registry, and
 resolved only when those are too.
 `thread.md` is re-rendered whenever image descriptions change. A thread is "formatted" when its raw
 file's front matter carries the current `source_version`.
+
+Raw files are assembled, not written by Copilot. `/kb-format` writes `work/convert/<thread>/summary.md`
+(summary, key points, action items, open questions; optional `title`/`topics` front matter).
+`kbmail kb assemble` checks it and writes the raw file: the front matter (title, thread,
+`source_version`, areas, topics, period, participants, message ids), the summary, a
+`<!-- kbmail: ... -->` line, and `## Conversation` built from `thread.md`. There, each message becomes
+a `###` entry, attachments are `####` and their headings are pushed below them, and pointers to text
+already in the thread are left out. Copilot doesn't spend output tokens retyping the mail and
+cannot change a fact while copying it. When a formatted thread gets new messages, `kbmail kb queue`
+copies the current summary back into `summary.md` and lists the new message ids. Assemble refuses
+that file until Copilot has changed it. Raw files written whole by Copilot in earlier versions keep
+their summary part (everything before `## Conversation`, plus `## Open questions`), and their
+conversation is regenerated on the next update.
 
 markitdown runs with content sniffing (magika/onnxruntime) off unless `convert.sniff_content` is
 true. The extension is always known, and onnxruntime crashes where security software has loaded an

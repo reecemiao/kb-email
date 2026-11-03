@@ -15,12 +15,12 @@ Bring the workspace up to date, working only on deltas.
 2. Work through the "Next" list from the status output, in order, using the matching skill:
    - labeling batches → `/kb-label`, then `kbmail label import`
    - proposed labels → ask the user to run `kbmail review` (only the new proposals are shown); also
-     suggest spot-checking rule labels with `kbmail review --source auto` now and then
+     suggest spot-checking rule and thread labels with `kbmail review --source auto` now and then
    - rules due → `/kb-rules` (read `config/rules_journal.md` first: build on previous conclusions)
    - KB selection → `/kb-select`, `kbmail kb import`, `kbmail kb convert`
    - images/SVG → `/kb-svg`, `/kb-images` or ask the user
    - questions → remind the user about `review/questions.yaml`, then `kbmail questions ingest`
-   - format queue → `/kb-format`
+   - format queue → `/kb-format`, `kbmail kb assemble`
    - wiki queue → `kbmail wiki queue`, `/kb-wiki-ingest`
 3. If the last `wiki_lint` in `state/runs.json` is older than 7 days, run `/kb-wiki-lint`.
 4. If `people_build` changed people (see `work/people/PEOPLE_DIGEST.md`, column `changed`), run `/kb-people`.

@@ -132,18 +132,29 @@ def test_full_pipeline(ws, mailbox):
     questions.ingest(ws, fetch=False, log=quiet)
     assert list(ws.path("raw/notes").glob("answers-*.md"))
 
-    # 9. /kb-format writes the raw file with source_version
+    # 9. /kb-format writes only the summary; kbmail assembles the raw file around it
     conv = ws.load_json(kb.CONVERTED)[tid]
     target = ws.path(conv["raw_target"])
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        dump_frontmatter(
-            {"title": "Payment API cut-over", "thread": tid, "source_version": conv["signature"]},
-            "# Payment API cut-over\n",
-        ),
-        encoding="utf-8",
-    )
+    queue = ws.path(kb.CONVERT_DIR, "QUEUE.md").read_text(encoding="utf-8")
+    assert f"write: `work/convert/{tid}/summary.md`" in queue and "source_version" not in queue
+    summary = ws.path(kb.CONVERT_DIR, tid, kb.SUMMARY)
+    summary.write_text("## Summary\nCut-over on 2026-11-15.\n\n## Key points\n- rollback at 2% errors\n", "utf-8")
+    assert kb.assemble(ws, log=quiet)["assembled"] == 1
     assert kb.write_queue(ws, log=quiet)["formatted"] == 1
+    meta, body = parse_frontmatter(target.read_text(encoding="utf-8"))
+    assert meta["source_version"] == conv["signature"] and meta["thread"] == tid
+    assert meta["participants"] == [
+        "Sarah Tanaka <sarah@contoso.com>",
+        "Taro Yamada <taro@contoso.com>",
+        "ken@vendor.example.com",
+    ]
+    assert len(meta["message_ids"]) == 2
+    assert body.lstrip().startswith("# Payment API cut-over\n\n## Summary\nCut-over on 2026-11-15.")
+    assert kb.GENERATED_MARK in body and "## Conversation" in body
+    assert "idempotency keys" in body and "Cut-over timeline chart" in body and "```mermaid" in body
+    assert "#### Attachment: spec.docx" in body and "\n# " not in body.split("## Conversation")[1]
+    assert "exported separately" not in body and body.count("is planned for") == 1
+    assert "hunter2secret" not in body and not summary.exists()
 
     # 10. wiki delta: queue -> mark -> change -> diff in queue
     counts = wiki.write_queue(ws, log=quiet)

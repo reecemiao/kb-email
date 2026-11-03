@@ -36,6 +36,11 @@ labeling:
   batch_size: 40           # messages per Copilot labeling batch
   preview_chars: 1000
   rule_threshold: 2.0      # default threshold if rules.yaml doesn't set one
+  inherit_thread: true     # a reply in a mail thread whose confirmed labels agree gets them without Copilot
+
+cleanup:
+  boilerplate: true        # drop signatures, disclaimers, external-sender banners, meeting-join blocks
+  extra_patterns: []       # extra regexes; a matching paragraph is dropped, e.g. ["(?i)sent from my iphone"]
 
 rules:
   refresh_every_days: 14           # rules refresh is "due" after this many days...

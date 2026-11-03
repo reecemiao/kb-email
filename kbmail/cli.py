@@ -227,6 +227,7 @@ def cmd_kb(args):
         "import": lambda: kb.import_select(ws),
         "convert": lambda: kb.convert(ws, force=args.force),
         "queue": lambda: kb.write_queue(ws),
+        "assemble": lambda: kb.assemble(ws),
         "status": lambda: print(kb.status(ws)),
     }[args.action]()
 
@@ -583,7 +584,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_rules)
 
     s = sub.add_parser("kb", help="knowledge-base selection and conversion")
-    s.add_argument("action", choices=["prepare", "import", "convert", "queue", "status"])
+    s.add_argument("action", choices=["prepare", "import", "convert", "queue", "assemble", "status"])
     s.add_argument("--batch-threads", type=int, help="threads per batch (default: kb.select_batch_threads)")
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_kb)

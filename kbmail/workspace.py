@@ -7,13 +7,11 @@ private git repository.
 
 Configuration precedence (highest first):
   1. command-line flags
-  2. environment variables          KBMAIL_<SECTION>__<KEY>=value
-  3. .env in the current directory  (same variables)
-  4. .env in the workspace root     (same variables)
-  5. kbmail.yaml
-  6. DEFAULT_CONFIG below
+  2. environment variables   KBMAIL_<SECTION>__<KEY>=value
+  3. kbmail.yaml
+  4. DEFAULT_CONFIG below
 Every CLI option that is not a one-off action (ids, paths, --force) has a
-config key, so every default can be set in kbmail.yaml or .env.
+config key, so every default can be set in kbmail.yaml.
 """
 
 from __future__ import annotations
@@ -21,12 +19,12 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import shutil
 from datetime import date
 from pathlib import Path
 
 import yaml
-from dotenv import dotenv_values
 
 from kbmail.textutil import now_iso
 
@@ -34,10 +32,11 @@ CONFIG_NAME = "kbmail.yaml"
 OTHERS = "others"
 ENV_PREFIX = "KBMAIL_"
 ENV_WORKSPACE = "KBMAIL_WORKSPACE"
-# Environment variables that are not settings (secrets, file locations): never in .env.example.
+# Environment variables that are not settings (secrets, file locations).
 ENV_SECRETS = {"KBMAIL_DIRECTORY_PASSWORD", "KBMAIL_DIRECTORY_CONFIG"}
 # Company-specific directory settings live in their own (git-ignored) file, merged into `directory`.
 DIRECTORY_FILE = "config/directory.yaml"
+# Older versions read KBMAIL_* settings from this file; it is no longer read (see stale_env_files).
 ENV_FILE = ".env"
 
 DEFAULT_CONFIG: dict = {
@@ -138,7 +137,7 @@ DEFAULT_CONFIG: dict = {
     },
 }
 
-# One-line help per key, used for the generated .env.example and `kbmail config show`.
+# One-line help per key.
 CONFIG_HELP: dict[str, str] = {
     "me.name": "your display name (used in drafts)",
     "me.emails": "all your SMTP addresses, comma-separated",
@@ -241,7 +240,7 @@ class WorkspaceError(RuntimeError):
     pass
 
 
-# ---------------------------------------------------------------- environment / .env
+# ---------------------------------------------------------------- environment
 
 _TRUE = {"1", "true", "yes", "on", "y"}
 _FALSE = {"0", "false", "no", "off", "n"}
@@ -262,23 +261,26 @@ def env_name(path: tuple[str, ...] | str) -> str:
     return ENV_PREFIX + "__".join(p.upper() for p in parts)
 
 
-def read_env(root: Path | None = None) -> dict[str, tuple[str, str]]:
-    """KBMAIL_* variables -> (value, source). Later sources win: workspace .env, cwd .env, environment."""
-    out: dict[str, tuple[str, str]] = {}
-    files = []
-    if root is not None:
-        files.append(Path(root) / ENV_FILE)
+def read_env() -> dict[str, tuple[str, str]]:
+    """KBMAIL_* environment variables -> (value, source)."""
+    return {k: (v, "environment") for k, v in os.environ.items() if k.startswith(ENV_PREFIX)}
+
+
+_ENV_LINE = re.compile(r"^\s*(?:export\s+)?(KBMAIL_\w+)\s*=", re.M)
+
+
+def stale_env_files(root: Path | None = None) -> list[tuple[Path, list[str]]]:
+    """.env files (workspace root, current directory) that still set KBMAIL_* variables kbmail no longer reads."""
+    files = [Path(root) / ENV_FILE] if root is not None else []
     cwd_env = Path.cwd() / ENV_FILE
     if not files or cwd_env.resolve() != files[0].resolve():
         files.append(cwd_env)
+    out = []
     for f in files:
         if f.is_file():
-            for k, v in dotenv_values(f).items():
-                if k.startswith(ENV_PREFIX) and v is not None:
-                    out[k] = (v, str(f))
-    for k, v in os.environ.items():
-        if k.startswith(ENV_PREFIX):
-            out[k] = (v, "environment")
+            names = _ENV_LINE.findall(f.read_text(encoding="utf-8", errors="replace"))
+            if names:
+                out.append((f, names))
     return out
 
 
@@ -323,12 +325,12 @@ def env_overrides(root: Path | None = None) -> tuple[dict, dict[str, str], list[
     overrides: dict = {}
     sources: dict[str, str] = {}
     warnings = []
-    for var, (raw, src) in sorted(read_env(root).items()):
+    for var, (raw, src) in sorted(read_env().items()):
         if var == ENV_WORKSPACE or var in ENV_SECRETS or not raw.strip():
             continue  # an empty value (KEY=) means "not set"
         path = known.get(var) or sections.get(var)
         if path is None:
-            warnings.append(f"ignoring unknown setting {var} (from {src}); see .env.example for valid names")
+            warnings.append(f"ignoring unknown setting {var} (from {src}); see `kbmail config show` for valid names")
             continue
         default = DEFAULT_CONFIG
         for part in path:
@@ -338,45 +340,10 @@ def env_overrides(root: Path | None = None) -> tuple[dict, dict[str, str], list[
             cur = cur.setdefault(part, {})
         cur[path[-1]] = coerce(raw, default, var)
         sources[".".join(path)] = src
+    for f, names in stale_env_files(root):
+        shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")
+        warnings.append(f"{f} is no longer read ({shown}); move these settings to {CONFIG_NAME}")
     return overrides, sources, warnings
-
-
-def env_example() -> str:
-    """A commented .env template listing every setting with its default."""
-    lines = [
-        "# kbmail settings. Copy to .env (or set real environment variables) and uncomment what you need.",
-        "# Precedence: CLI flag > environment > .env (current dir) > .env (workspace) > kbmail.yaml > default.",
-        "# Names: KBMAIL_<SECTION>__<KEY> (double underscore between levels).",
-        "# Lists: comma-separated (a,b) or YAML ([a, b]). Booleans: true/false.",
-        "",
-        "# Workspace folder used when kbmail runs outside it (same as --workspace).",
-        f"# {ENV_WORKSPACE}=C:\\kb",
-    ]
-    section = None
-    for path in _leaf_paths(DEFAULT_CONFIG):
-        if path[0] != section:
-            section = path[0]
-            lines += ["", f"# --- {section}"]
-        default = DEFAULT_CONFIG
-        for part in path:
-            default = default[part]
-        if isinstance(default, bool):
-            val = str(default).lower()
-        elif isinstance(default, list):
-            val = (
-                ",".join(map(str, default))
-                if all(isinstance(x, str) for x in default)
-                else yaml.safe_dump(default, default_flow_style=True).strip()
-            )
-        elif default is None:
-            val = ""
-        else:
-            val = str(default)
-        help_ = CONFIG_HELP.get(".".join(path))
-        if help_:
-            lines.append(f"# {help_}")
-        lines.append(f"# {env_name(path)}={val}")
-    return "\n".join(lines) + "\n"
 
 
 class Workspace:
@@ -397,9 +364,12 @@ class Workspace:
         for p in [here, *here.parents]:
             if (p / CONFIG_NAME).exists():
                 return cls(p)
+        hint = ""
+        if any(ENV_WORKSPACE in names for _, names in stale_env_files()):
+            hint = f" ({ENV_WORKSPACE} in a .env file is no longer read; set it in the environment.)"
         raise WorkspaceError(
             f"No {CONFIG_NAME} found in {here} or its parents. Run `kbmail init <folder>` first, "
-            "or pass --workspace / set KBMAIL_WORKSPACE."
+            f"or pass --workspace / set {ENV_WORKSPACE}.{hint}"
         )
 
     # ------------------------------------------------------------ paths
@@ -452,7 +422,7 @@ class Workspace:
         return self._config
 
     def opt(self, value, dotted: str):
-        """A CLI value if given, else the configured default (kbmail.yaml / .env / environment)."""
+        """A CLI value if given, else the configured default (kbmail.yaml / environment)."""
         return self.cfg(dotted) if value is None else value
 
     def cfg(self, dotted: str, default=None):
@@ -573,7 +543,10 @@ _USER_OWNED = {
 # Files shipped by earlier versions and replaced since (prompt files -> skills,
 # copilot-instructions.md -> AGENTS.md, raw-template.md -> summary-template.md).
 # Removed on upgrade only if they are still ours.
+_ENV_TEMPLATE_MARKER = "# kbmail settings. Copy to .env"
 _OBSOLETE = {
+    # Settings are kbmail.yaml (or real environment variables) only; .env files are no longer read.
+    ".env.example": _ENV_TEMPLATE_MARKER,
     ".github/copilot-instructions.md": "# Copilot instructions for this kbmail workspace",
     # /kb-format writes only summary.md now; kbmail assembles the raw file.
     ".github/skills/kb-format/raw-template.md": "---\ntitle: <specific title>",
@@ -607,6 +580,13 @@ def _remove_obsolete(target: Path) -> list[str]:
         if p.is_file() and p.read_text(encoding="utf-8", errors="replace").startswith(marker):
             p.unlink()
             removed.append(rel)
+    # The all-commented .env that `kbmail init` used to write; one you edited is kept (and warned about).
+    env = target / ENV_FILE
+    if env.is_file():
+        text = env.read_text(encoding="utf-8", errors="replace")
+        if text.startswith(_ENV_TEMPLATE_MARKER) and not _ENV_LINE.search(text):
+            env.unlink()
+            removed.append(ENV_FILE)
     prompts = target / ".github" / "prompts"
     if prompts.is_dir() and not any(prompts.iterdir()):
         prompts.rmdir()
@@ -655,12 +635,6 @@ def init_workspace(target: Path, upgrade: bool = False) -> list[str]:
         if rel.startswith(".githooks/"):
             dst.chmod(0o755)  # git runs hooks only when executable (ignored on Windows)
         written.append(rel)
-    # Generated from DEFAULT_CONFIG so it always lists every current setting.
-    (target / ".env.example").write_text(env_example(), encoding="utf-8")
-    written.append(".env.example")
-    if not (target / ENV_FILE).exists():
-        (target / ENV_FILE).write_text(env_example(), encoding="utf-8")
-        written.append(ENV_FILE)
     ws = Workspace(target)
     ws.ensure_dirs()
     return written

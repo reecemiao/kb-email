@@ -62,7 +62,6 @@ def test_gitignore_tracks_knowledge_and_keeps_the_mailbox_out(populated):
     staged = set(git(ws, "diff", "--cached", "--name-only").split())
     for must in (
         "kbmail.yaml",
-        ".env.example",
         ".gitignore",
         ".gitattributes",
         ".githooks/pre-commit",

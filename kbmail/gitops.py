@@ -23,7 +23,7 @@ TEXT_EXT = {".md", ".json", ".jsonl", ".yaml", ".yml", ".txt", ".csv", ".mmd", "
 DENY: list[tuple[re.Pattern, str]] = [
     (re.compile(r"^data/"), "raw mail/calendar/Teams export"),
     (re.compile(r"^work/"), "generated queue (re-created by `kbmail sync`)"),
-    (re.compile(r"(^|/)\.env$"), "local settings (may contain ids or secrets); commit .env.example instead"),
+    (re.compile(r"(^|/)\.env$"), "local environment file (may contain ids or secrets); put settings in kbmail.yaml"),
     (re.compile(r"^state/msal_cache\.bin$"), "Microsoft sign-in token cache"),
     (
         re.compile(r"^state/(index\.jsonl|calendar_index\.jsonl|export_state\.json|teams_state\.json|people\.json)$"),
@@ -120,7 +120,7 @@ def check(ws: Workspace, staged: bool = False, log=print) -> int:
                 f"{path}: {len(data) // 1_000_000} MB (over {MAX_BYTES // 1_000_000} MB; keep big files out)"
             )
             continue
-        if PurePosixPath(path).suffix.lower() in TEXT_EXT or path.endswith(".env.example"):
+        if PurePosixPath(path).suffix.lower() in TEXT_EXT:
             lines = _secret_lines(data.decode("utf-8", "replace"))
             if lines:
                 where = ", ".join(map(str, lines[:5])) + (" ..." if len(lines) > 5 else "")

@@ -1,4 +1,4 @@
-"""Settings precedence: CLI > environment > .env (cwd) > .env (workspace) > kbmail.yaml > defaults."""
+"""Settings precedence: CLI > environment > kbmail.yaml > defaults. .env files are not read."""
 
 import os
 
@@ -11,8 +11,6 @@ from kbmail.workspace import (
     Workspace,
     WorkspaceError,
     _leaf_paths,
-    env_example,
-    env_overrides,
     init_workspace,
 )
 
@@ -22,30 +20,33 @@ def root(tmp_path, monkeypatch):
     for k in list(os.environ):
         if k.startswith("KBMAIL_"):
             monkeypatch.delenv(k)
-    monkeypatch.chdir(tmp_path)  # keep the repo's own cwd .env (if any) out of the tests
+    monkeypatch.chdir(tmp_path)  # keep a stray .env in the repo's cwd out of the tests
     r = tmp_path / "ws"
     init_workspace(r)
     (r / "kbmail.yaml").write_text(yaml.safe_dump({"outlook": {"days": 10}, "triage": {"days": 5}}), encoding="utf-8")
     return r
 
 
-def test_precedence_yaml_dotenv_environment(root, monkeypatch):
-    assert Workspace(root).cfg("outlook.days") == 10
-    (root / ".env").write_text("KBMAIL_OUTLOOK__DAYS=20\nKBMAIL_TRIAGE__DAYS=7\n", encoding="utf-8")
+def test_precedence_yaml_environment_cli(root, monkeypatch):
     ws = Workspace(root)
-    assert ws.cfg("outlook.days") == 20 and ws.cfg("triage.days") == 7
-    assert ws.config_sources["outlook.days"].endswith(".env")
+    assert ws.cfg("outlook.days") == 10 and ws.config_sources["outlook.days"] == "kbmail.yaml"
     assert ws.config_sources["labeling.batch_size"] == "default"
-    # a .env in the current directory beats the workspace one
-    (root.parent / ".env").write_text("KBMAIL_OUTLOOK__DAYS=25\n", encoding="utf-8")
-    assert Workspace(root).cfg("outlook.days") == 25
-    # real environment beats both
     monkeypatch.setenv("KBMAIL_OUTLOOK__DAYS", "30")
     ws = Workspace(root)
     assert ws.cfg("outlook.days") == 30 and ws.config_sources["outlook.days"] == "environment"
-    assert ws.cfg("triage.days") == 7  # untouched keys keep their own source
-    # and an explicit CLI value beats everything
+    assert ws.cfg("triage.days") == 5  # untouched keys keep their own source
+    # an explicit CLI value beats everything
     assert ws.opt(3, "outlook.days") == 3 and ws.opt(None, "outlook.days") == 30
+
+
+def test_dotenv_files_are_not_read_but_warned_about(root, monkeypatch):
+    (root / ".env").write_text("# old\nKBMAIL_OUTLOOK__DAYS=20\nexport KBMAIL_TRIAGE__DAYS=7\n", encoding="utf-8")
+    (root.parent / ".env").write_text("# KBMAIL_OUTLOOK__DAYS=25\n", encoding="utf-8")  # commented: silent
+    ws = Workspace(root)
+    assert ws.cfg("outlook.days") == 10 and ws.cfg("triage.days") == 5
+    assert ws.config_sources["outlook.days"] == "kbmail.yaml"
+    [w] = [w for w in ws.config_warnings if ".env" in w]
+    assert "no longer read" in w and "KBMAIL_OUTLOOK__DAYS" in w and "KBMAIL_TRIAGE__DAYS" in w
 
 
 def test_types_are_taken_from_defaults(root, monkeypatch):
@@ -83,37 +84,38 @@ def test_unknown_and_invalid_values(root, monkeypatch):
         Workspace(root).config  # noqa: B018
 
 
-def test_workspace_location_from_dotenv(root, tmp_path, monkeypatch):
+def test_workspace_location_from_environment(root, tmp_path, monkeypatch):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / ".env").write_text(f"KBMAIL_WORKSPACE={root}\n", encoding="utf-8")
     monkeypatch.chdir(elsewhere)
+    (elsewhere / ".env").write_text(f"KBMAIL_WORKSPACE={root}\n", encoding="utf-8")
+    with pytest.raises(WorkspaceError, match=r"KBMAIL_WORKSPACE in a \.env file is no longer read"):
+        Workspace.find()
+    monkeypatch.setenv("KBMAIL_WORKSPACE", str(root))
     assert Workspace.find().root == root.resolve()
 
 
-def test_env_example_lists_every_setting_with_its_default(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    text = env_example()
-    for path in _leaf_paths(DEFAULT_CONFIG):
-        assert "KBMAIL_" + "__".join(p.upper() for p in path) + "=" in text
-    # uncommenting the whole template must reproduce the defaults exactly
-    lines = [ln[2:] for ln in text.splitlines() if ln.startswith("# KBMAIL_") and "WORKSPACE" not in ln]
-    (tmp_path / ".env").write_text("\n".join(lines), encoding="utf-8")
-    overrides, _, warnings = env_overrides()
-    assert not warnings
-    for path in _leaf_paths(overrides):
-        got, want = overrides, DEFAULT_CONFIG
-        for p in path:
-            got, want = got[p], want[p]
-        assert got == want, path
-
-
-def test_init_writes_env_files_and_config_cli(root, capsys, monkeypatch):
-    assert (root / ".env.example").exists() and (root / ".env").exists()
-    (root / ".env").write_text("KBMAIL_MAIL__SEARCH_LIMIT=3\n", encoding="utf-8")
-    assert main(["-w", str(root), "config", "show", "mail"]) == 0
+def test_every_setting_has_an_env_name_in_config_show(root, capsys):
+    assert main(["-w", str(root), "config", "show"]) == 0
     out = capsys.readouterr().out
-    assert "mail.search_limit = 3" in out and ".env" in out and "KBMAIL_MAIL__SEARCH_LIMIT" in out
-    # --upgrade refreshes .env.example but never touches the user's .env
+    for path in _leaf_paths(DEFAULT_CONFIG):
+        assert "KBMAIL_" + "__".join(p.upper() for p in path) + "]" in out, path
+
+
+def test_init_writes_no_env_files_and_upgrade_removes_generated_ones(root, capsys, monkeypatch):
+    assert not (root / ".env.example").exists() and not (root / ".env").exists()
+    template = "# kbmail settings. Copy to .env (or set real environment variables) and uncomment what you need.\n"
+    (root / ".env.example").write_text(template + "# KBMAIL_OUTLOOK__DAYS=30\n", encoding="utf-8")
+    (root / ".env").write_text(template + "# KBMAIL_OUTLOOK__DAYS=30\n", encoding="utf-8")
+    written = init_workspace(root, upgrade=True)
+    assert "removed .env.example" in written and "removed .env" in written
+    assert not (root / ".env.example").exists() and not (root / ".env").exists()
+    # a .env the user edited is kept (kbmail warns about it instead)
+    (root / ".env").write_text(template + "KBMAIL_OUTLOOK__DAYS=60\n", encoding="utf-8")
     init_workspace(root, upgrade=True)
-    assert (root / ".env").read_text(encoding="utf-8") == "KBMAIL_MAIL__SEARCH_LIMIT=3\n"
+    assert (root / ".env").exists()
+    monkeypatch.setenv("KBMAIL_MAIL__SEARCH_LIMIT", "3")
+    assert main(["-w", str(root), "config", "show", "mail"]) == 0
+    captured = capsys.readouterr()
+    assert "mail.search_limit = 3" in captured.out and "environment; KBMAIL_MAIL__SEARCH_LIMIT" in captured.out
+    assert "no longer read" in captured.err

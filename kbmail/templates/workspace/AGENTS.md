@@ -22,7 +22,7 @@ chats. Python (`kbmail` CLI) does all deterministic work; you do the reading, ju
 | `wiki/` | write, following `wiki/SCHEMA.md` | the knowledge base |
 | `config/rules.yaml`, `config/rules_journal.md` | write via `/kb-rules` | labeling rules + conclusions |
 | `drafts/` | write | email drafts; kbmail never sends mail |
-| `kbmail.yaml`, `.env` | only when the user asks | settings (`kbmail config show` explains them) |
+| `kbmail.yaml` | only when the user asks | settings (`kbmail config show` explains them) |
 
 ## Working rules
 

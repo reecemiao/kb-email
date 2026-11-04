@@ -2,7 +2,7 @@
 #
 # Tracked: what you and Copilot authored, plus what delta runs need to continue on another machine:
 #   wiki/, raw/ (formatted sources), config/, kbmail.yaml, AGENTS.md, .github/, .vscode/,
-#   .env.example, review/questions.yaml, review/images/descriptions.yaml + *.mmd,
+#   review/questions.yaml, review/images/descriptions.yaml + *.mmd,
 #   state/{labels,kb_selection,kb_convert,images,runs}.json, state/wiki_*, state/rules_history/
 # Ignored: the raw mail export (re-exportable from Outlook), generated queues, secrets, binaries.
 # Before pushing anything: `kbmail git check` (also runs as the .githooks/pre-commit hook).

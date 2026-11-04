@@ -14,7 +14,7 @@ This file is refreshed by `kbmail init --upgrade`.
 | `wiki/` | the knowledge base (pages, `index.md`, `log.md`, `SCHEMA.md`) | yes |
 | `raw/` | formatted sources the wiki is compiled from (`email/`, `teams/`, `notes/`, `web/`, `docs/`) | yes (except `raw/inbox/`) |
 | `config/` | labeling rules, rules journal, people overrides | yes |
-| `kbmail.yaml`, `.env.example` | settings (`.env` holds your local overrides) | yes (`.env`: no) |
+| `kbmail.yaml` | settings | yes |
 | `AGENTS.md`, `.github/`, `.vscode/`, `.githooks/` | Copilot instructions, skills, agent, hook, editor settings, git hook | yes |
 | `review/` | your to-do area: questions, image descriptions, Mermaid conversions | answers, descriptions and `.mmd` only |
 | `state/` | kbmail bookkeeping | only what moves with you (see below) |
@@ -38,7 +38,7 @@ that lets delta runs continue on another machine:
 
 - the knowledge: `wiki/`, `raw/` (except `raw/inbox/`), `review/questions.yaml`,
   `review/images/descriptions.yaml`, `review/images/*.mmd`
-- the setup: `kbmail.yaml`, `.env.example`, `config/`, `AGENTS.md`, `.github/`, `.vscode/`,
+- the setup: `kbmail.yaml`, `config/`, `AGENTS.md`, `.github/`, `.vscode/`,
   `.githooks/`, `.gitignore`, `.gitattributes`
 - the decisions and delta state:
   - `state/labels.json`: your confirmed labels, the ground truth for rules
@@ -93,7 +93,7 @@ Review `git diff wiki/` before committing to see exactly what Copilot changed in
 git clone https://github.com/<owner>/<name>.git C:\kb
 cd C:\kb
 git config core.hooksPath .githooks
-kbmail init . --upgrade             # recreates local folders and .env from the template
+kbmail init . --upgrade             # recreates local folders from the template
 kbmail export --days 30             # re-export mail; labels, KB choices and image descriptions re-attach
 kbmail kb convert                   # rebuilds work files for threads that were not formatted yet
 kbmail status

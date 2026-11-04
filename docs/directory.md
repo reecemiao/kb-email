@@ -154,8 +154,8 @@ Views request the attributes they use automatically. `attributes: [...]` adds mo
 | `anonymous` | no bind | none |
 
 The password is never written to disk by kbmail. `KBMAIL_DIRECTORY_PASSWORD` is read only from the
-environment, and it is not a setting. Avoid putting it in `.env`. If you do, `.env` is git-ignored,
-and `kbmail git check` refuses to commit it.
+environment, and it is not a setting. kbmail does not read `.env` files, and `kbmail git check`
+refuses to commit one.
 
 NTLM needs MD4, which current OpenSSL builds lack. The `directory` extra installs `pycryptodome`,
 which ldap3 uses instead.

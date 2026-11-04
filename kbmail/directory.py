@@ -1,6 +1,6 @@
 """Corporate directory (LDAP / Active Directory) lookups by e-mail: titles, departments and managers.
 
-Everything company-specific is configuration (`directory.*` in kbmail.yaml / .env): server, TLS
+Everything company-specific is configuration (`directory.*` in kbmail.yaml / config/directory.yaml): server, TLS
 truststore, search base and scope, filters, and which attributes mean what. Two mappings:
 
 * ``fields``     kbmail field -> list of LDAP attributes (first non-empty wins), e.g.

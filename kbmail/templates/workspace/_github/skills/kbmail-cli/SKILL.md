@@ -20,8 +20,7 @@ Commands that change state wait for each other, so never run two kbmail commands
 | command | what it does |
 |---|---|
 | `kbmail status [--json]` | counts, last runs, and the ordered "Next" list |
-| `kbmail config show [prefix]` | effective settings, their source (default / kbmail.yaml / .env / environment) and variable name |
-| `kbmail config env` | print a commented `.env` template |
+| `kbmail config show [prefix]` | effective settings, their source (default / kbmail.yaml / environment) and variable name |
 | `kbmail sync [--no-export] [--teams]` | delta run of every deterministic step, then status |
 | `kbmail hook session-start` | JSON status context for the session-start hook (used by `.github/hooks/kbmail.json`) |
 | `kbmail init [path] [--upgrade]` | create a workspace, or refresh skills/agents/schema in it |

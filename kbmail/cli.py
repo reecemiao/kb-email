@@ -13,7 +13,7 @@ from kbmail.workspace import Workspace, WorkspaceError, init_workspace
 
 def _ws(args) -> Workspace:
     ws = Workspace.find(args.workspace)
-    ws.config  # noqa: B018 - load now so .env problems surface before any work starts
+    ws.config  # noqa: B018 - load now so config problems surface before any work starts
     for w in ws.config_warnings:
         print(f"warning: {w}", file=sys.stderr)
     return ws
@@ -465,11 +465,8 @@ def cmd_git(args):
 
 
 def cmd_config(args):
-    from kbmail.workspace import env_example, env_name
+    from kbmail.workspace import env_name
 
-    if args.action == "env":
-        print(env_example(), end="")
-        return
     ws = _ws(args)
     cfg = ws.config
     for key, src in ws.config_sources.items():
@@ -676,8 +673,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("event", choices=["session-start"])
     s.set_defaults(func=cmd_hook)
 
-    s = sub.add_parser("config", help="show effective settings and where they come from; print a .env template")
-    s.add_argument("action", choices=["show", "env"], nargs="?", default="show")
+    s = sub.add_parser("config", help="show effective settings and where they come from")
+    s.add_argument("action", choices=["show"], nargs="?", default="show")
     s.add_argument("key", nargs="?", help="(show) only keys starting with this, e.g. outlook")
     s.set_defaults(func=cmd_config)
     return p

@@ -18,7 +18,7 @@ harnesses, in GitHub Copilot CLI, and largely in other skills-compatible agents.
 | `.vscode/settings.json` | `chat.useHooks` (Local), terminal auto-approve for `kbmail` | remove the auto-approve entry to confirm every command |
 
 `kbmail init <folder> --upgrade` refreshes all of these after you update the tool. It never touches
-`kbmail.yaml`, `.env`, `config/*` or your wiki pages. It also removes the files from earlier versions
+`kbmail.yaml`, `config/*` or your wiki pages. It also removes the files from earlier versions
 (`.github/prompts/kb-*.prompt.md`, `.github/copilot-instructions.md`) when they are unmodified.
 Use **Chat: Open Customizations** to see everything VS Code loaded. Right-click in the Chat view →
 **Diagnostics** shows load errors.

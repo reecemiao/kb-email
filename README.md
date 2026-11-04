@@ -193,7 +193,7 @@ print a warning, and invalid values stop the command with the variable's name.
 | 3 | Confirm or correct every label | you | `kbmail review` (Enter = accept, `1,2` = set areas, `v` view, `b` back, `q` quit) or `kbmail review export-csv` / `import-csv` for Excel |
 | 4 | Turn confirmed labels into deterministic rules | Copilot | `kbmail rules prepare` → `/kb-rules` (edits `config/rules.yaml`, iterates with `kbmail rules evaluate`, then `kbmail rules commit`) |
 | 5 | Pick threads with durable knowledge | Copilot | `kbmail kb prepare` → `/kb-select` → `kbmail kb import` |
-| 6 | Convert selected mail + attachments (markitdown), then clean them into `raw/` | kbmail + Copilot | `kbmail kb convert` → `/kb-format` |
+| 6 | Convert selected mail + attachments (markitdown), summarize them; kbmail builds the `raw/` file | kbmail + Copilot | `kbmail kb convert` → `/kb-format` (writes `summary.md`) → `kbmail kb assemble` |
 | 7 | Images: vision **off** → you describe them in `review/images/descriptions.yaml` (preview `REVIEW.md`), vision **on** → `/kb-images`. SVGs: kbmail converts draw.io exports and simple box-and-arrow diagrams to Mermaid itself and skips icons; for the rest `/kb-svg` works from a text digest (no vision needed) | you / Copilot | `kbmail images import` (or `kbmail images describe`); `kbmail svg2mermaid <file>` for any SVG |
 | 8 | Answer what Copilot didn't understand; give links to documentation | you | edit `review/questions.yaml` (or `kbmail questions answer`), then `kbmail questions ingest` (fetches URLs into `raw/web/`). Drop your own documents into `raw/inbox/` → `kbmail raw import` |
 | 9 | Build the wiki (LLM Wiki v2: tiers, confidence, supersession, typed graph) | Copilot | `kbmail wiki queue` → `/kb-wiki-ingest` → `kbmail wiki lint` → `/kb-wiki-lint` |
@@ -211,16 +211,21 @@ the wiki with citations and can file good answers back into it.
   `state/export_state.json`. The next export starts at the watermark minus `overlap_hours` and
   de-duplicates by Internet Message-ID against `state/index.jsonl`. Calendar re-scans from the last
   run (meetings get edited), and future events are always re-scanned.
-* Rules label new mail first (`status: auto`); only what the rules can't decide goes to `/kb-label`,
-  and only new proposals appear in `kbmail review`. Spot-check rule labels with
-  `kbmail review --source auto`.
+* Rules label new mail first (`status: auto`). A reply in a mail thread whose confirmed labels all
+  agree gets those labels too (`labeling.inherit_thread`), and follows if you change them later.
+  Only what is left goes to `/kb-label`, and only new proposals appear in `kbmail review`.
+  Spot-check rule and thread labels with `kbmail review --source auto`.
+* Signatures, legal disclaimers, "external sender" banners and Teams/Zoom join blocks are removed
+  before mail text reaches Copilot or `raw/` (`cleanup.boilerplate`; add your own with
+  `cleanup.extra_patterns`).
 * **(b) rule refresh:** `state/runs.json` records each `rules commit` (time, confirmed-label count,
   coverage, accuracy). A refresh is due after `rules.refresh_every_days` or
   `rules.refresh_after_new_confirmed` new confirmations. `kbmail rules prepare` hands Copilot the
   evaluation, mistakes, mined signals, labels confirmed since last time **and the previous conclusions**
   from `config/rules_journal.md`. Each committed version is snapshotted in `state/rules_history/`.
 * KB selection works per thread. A thread is re-assessed only when it gets new messages, and
-  conversion only re-runs when the selected messages change. `/kb-format` updates the existing raw file.
+  conversion only re-runs when the selected messages change. `/kb-format` then reads only the new
+  messages and updates the summary kbmail copied out of the raw file; `kbmail kb assemble` rebuilds it.
 * **(c) wiki:** `state/wiki_manifest.json` stores the sha256 of every raw file at ingest time, and
   `state/wiki_snapshots/` keeps a copy. `kbmail wiki queue` lists new, changed and deleted raw files;
   a changed file comes **with a unified diff**, so Copilot integrates only what changed.

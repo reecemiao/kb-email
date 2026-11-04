@@ -10,7 +10,7 @@ harnesses, in GitHub Copilot CLI, and largely in other skills-compatible agents.
 |---|---|---|
 | `AGENTS.md` | always-on instructions: folder contract, privacy, output formats, how to ask questions | cross-agent format, read by Local and Copilot harnesses |
 | `.github/skills/kb-*/SKILL.md` | one [agent skill](https://agentskills.io) per job, usable as `/kb-*` commands | the model also loads a skill on its own when the description matches the request |
-| `.github/skills/*/…` resources | `raw-template.md`, `draft-template.md`, `rules-format.md` | loaded only when the skill reaches that step |
+| `.github/skills/*/…` resources | `summary-template.md`, `draft-template.md`, `rules-format.md` | loaded only when the skill reaches that step |
 | `.github/skills/kbmail-cli/` | CLI reference | `user-invocable: false`: hidden from `/`, loaded when the model needs a command |
 | `.github/agents/kb-librarian.agent.md` | **KB Librarian** custom agent | tools `read, edit, search, execute, todo, agent, askQuestions`, **no `web`**; handoff buttons (Local) for sync, wiki update, what needs a reply |
 | `.github/hooks/kbmail.json` | `sessionStart` hook → `kbmail hook session-start` | injects `kbmail status` (counts + ordered next actions, warnings about failed or stale exports first) as context; fails open |
@@ -32,7 +32,7 @@ Use **Chat: Open Customizations** to see everything VS Code loaded. Right-click 
 | `/kb-label` | label batches → `*.result.jsonl` |
 | `/kb-rules` | write/refresh `config/rules.yaml`, evaluate, commit, journal |
 | `/kb-select` | choose KB threads, raise questions |
-| `/kb-format` | converted thread → clean `raw/` source |
+| `/kb-format` | converted thread → `summary.md`; `kbmail kb assemble` builds the `raw/` source |
 | `/kb-images` | describe images (vision on) |
 | `/kb-svg` | SVGs kbmail could not convert itself → Mermaid or description, from text digests (no vision needed) |
 | `/kb-wiki-ingest` | delta ingest into the wiki per `SCHEMA.md` |
@@ -97,6 +97,12 @@ knowledge base never contains silent "[image]" holes.
 
 * Use a strong model for `/kb-rules`, `/kb-wiki-ingest` and `/kb-people`. A fast model is fine for
   `/kb-label` and `/kb-select`. A custom agent or handoff can pin a model if you want it fixed.
+* kbmail keeps what Copilot reads and writes small:
+  - Replies in a mail thread whose confirmed labels agree are labeled without Copilot (`labeling.inherit_thread`).
+  - Signatures, disclaimers, "external sender" banners and Teams/Zoom join blocks are removed before any
+    batch or raw file is written (`cleanup.boilerplate`, extra patterns in `cleanup.extra_patterns`).
+  - `/kb-format` writes only the summary part of a raw file. kbmail copies in the conversation and
+    attachments, and for an updated thread names the new messages, so Copilot reads only those.
 * Batch sizes (`labeling.batch_size`, `kb.select_batch_threads`) keep each file within a comfortable
   context size. Lower them if Copilot starts skipping items. The importers report missing ids, and
   those items return to the queue.

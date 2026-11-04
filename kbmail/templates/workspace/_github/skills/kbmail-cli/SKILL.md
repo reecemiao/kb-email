@@ -50,7 +50,7 @@ Commands that change state wait for each other, so never run two kbmail commands
 
 | command | what it does |
 |---|---|
-| `kbmail label prepare [--batch-size N] [--limit N]` | write `work/labeling/batch_NNN.md` for unlabeled mail |
+| `kbmail label prepare [--batch-size N] [--limit N]` | label replies like their confirmed thread, then write `work/labeling/batch_NNN.md` for the rest |
 | `kbmail label import` | validate and import `*.result.jsonl` |
 | `kbmail label apply-rules` / `kbmail label counts` | apply rules to unlabeled mail / label counts by status |
 | `kbmail review [--source proposed\|auto\|all] [--area A] [--order confidence\|date] [--accept-above X]` | interactive label confirmation (the user runs this) |
@@ -66,8 +66,9 @@ Commands that change state wait for each other, so never run two kbmail commands
 |---|---|
 | `kbmail kb prepare [--batch-threads N]` | write `work/kb_select/batch_NNN.md` for threads needing assessment |
 | `kbmail kb import` | import selection results (questions go to `review/questions.yaml`) |
-| `kbmail kb convert [--force]` | markitdown conversion + images + redaction into `work/convert/` |
+| `kbmail kb convert [--force]` | markitdown conversion + images + boilerplate cleanup + redaction into `work/convert/` |
 | `kbmail kb queue` / `kbmail kb status` | refresh `work/convert/QUEUE.md` / counts |
+| `kbmail kb assemble` | build `raw/` files from each `work/convert/<thread>/summary.md` plus the converted mail |
 | `kbmail images status\|review\|describe\|import` | image descriptions workflow (`review/images/`) |
 | `kbmail images svg [--force]` | auto-convert pending SVGs (simple diagrams → `.mmd`, icons skipped, complex → `<id>.svg.md` digest) |
 | `kbmail svg2mermaid <file.svg> [-o out] [--digest]` | convert one SVG/.svgz; exit 0 = Mermaid, 3 = too complex (prints the digest) |

@@ -5,7 +5,8 @@ state/labels.json:
                       "source": "copilot|rule|user", "confidence": 0.8, "reason": "...",
                       "updated": "...", "history": [...] } }
 
-status: proposed = Copilot suggestion awaiting review; auto = assigned by rules;
+status: proposed = Copilot suggestion awaiting review; auto = assigned by rules (source "rule") or
+taken over from the confirmed labels of the same mail thread (source "thread");
 confirmed = reviewed by the user (the ground truth for rule refreshes).
 """
 
@@ -21,7 +22,8 @@ from itertools import batched
 
 from kbmail.history import History
 from kbmail.lock import workspace_lock
-from kbmail.records import fmt_people, fmt_person, message_index, read_message
+from kbmail.noise import render_clean
+from kbmail.records import fmt_people, fmt_person, message_index, read_message, threads
 from kbmail.redact import redact
 from kbmail.textutil import compact, now_iso
 from kbmail.workspace import OTHERS, Workspace
@@ -30,6 +32,7 @@ LABELS = "state/labels.json"
 BATCHES = "state/label_batches.json"
 WORKDIR = "work/labeling"
 NOISE = "noise"  # label source for mail with no content of its own (kbmail.noise)
+THREAD = "thread"  # label source for replies labeled like the rest of their thread
 
 
 def load_labels(ws: Workspace) -> dict:
@@ -95,6 +98,55 @@ def mark_empty_responses(ws: Workspace, labels: dict, records: list[dict]) -> in
 # ---------------------------------------------------------------- batches for Copilot
 
 
+def apply_thread_labels(ws: Workspace, log=print) -> dict:
+    """Label unlabeled mail like the rest of its thread, when the thread's confirmed labels all agree.
+
+    Most mail is replies, and a reply is nearly always about what its thread is about, so asking
+    Copilot again costs tokens for nothing. Only mail threads with a real conversation id count
+    (Outlook ConversationID, or References for .eml); subject-only grouping can join unrelated mail,
+    and a Teams chat covers many topics over its days. Labels made here are `auto` (source
+    `thread`) and are recomputed on every run: when the user changes a confirmed label, or the
+    thread's confirmed labels stop agreeing, they follow or go back to the Copilot queue.
+    """
+    stats = {"labeled": 0, "updated": 0, "released": 0}
+    labels = load_labels(ws)
+    enabled = ws.cfg("labeling.inherit_thread", True)
+    for msgs in threads(ws).values():
+        mail = [m for m in msgs if m.get("source") != "teams" and m.get("conversation_id")]
+        confirmed = [m["id"] for m in mail if labels.get(m["id"], {}).get("status") == "confirmed"]
+        sets = {tuple(sorted(labels[m]["labels"])) for m in confirmed}
+        areas = list(labels[confirmed[0]]["labels"]) if enabled and len(sets) == 1 else None
+        for m in mail:
+            cur = labels.get(m["id"])
+            if cur and not (cur.get("status") == "auto" and cur.get("source") == THREAD):
+                continue  # rules, Copilot proposals and the user's decisions win
+            if areas is None:
+                if cur:
+                    del labels[m["id"]]
+                    stats["released"] += 1
+                continue
+            if cur and sorted(cur["labels"]) == sorted(areas):
+                continue
+            stats["updated" if cur else "labeled"] += 1
+            more = f" and {len(confirmed) - 3} more" if len(confirmed) > 3 else ""
+            set_label(
+                labels,
+                m["id"],
+                areas,
+                "auto",
+                THREAD,
+                None,
+                f"thread: same labels as confirmed {', '.join(confirmed[:3])}{more}",
+            )
+    if any(stats.values()):
+        save_labels(ws, labels)
+        log(
+            f"Thread labels: {stats['labeled']} new, {stats['updated']} updated, "
+            f"{stats['released']} back to the queue (labeled like the confirmed mail in their thread)."
+        )
+    return stats
+
+
 def _area_block(ws: Workspace) -> list[str]:
     lines = []
     for i, a in enumerate(ws.areas, 1):
@@ -115,8 +167,11 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
     pending = [r for r in message_index(ws).all() if r["id"] not in labels and r["id"] not in in_open]
     if ws.cfg("outlook.skip_meeting_responses", True) and (n := mark_empty_responses(ws, labels, pending)):
         save_labels(ws, labels)
-        pending = [r for r in pending if r["id"] not in labels]
         log(f"Labeled {n} meeting response(s) without a comment `{OTHERS}` (not sent to Copilot).")
+    # After the meeting responses: an "Accepted: ..." without a comment stays `others` (noise), not the thread's.
+    if apply_thread_labels(ws, log=log)["labeled"]:
+        labels = load_labels(ws)
+    pending = [r for r in pending if r["id"] not in labels]
     if limit:
         pending = pending[:limit]
     if not pending:
@@ -174,7 +229,7 @@ def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | N
                 lines.append(f"- attachments: {atts}")
             if hint:
                 lines.append(f"- {hint}")
-            text, _ = redact(compact(hist.render(rec, body, labels=labels), preview))
+            text, _ = redact(compact(render_clean(ws, hist, rec, body, labels=labels), preview))
             lines += ["", "> " + text.replace("\n", "\n> "), ""]
         p = ws.path(WORKDIR, f"{name}.md")
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -330,7 +385,7 @@ def interactive_review(
         out(f"From: {fmt_person(rec.get('from'))}")
         out(f"To:   {fmt_people(rec.get('to'), 4)}")
         out(f"Subj: {rec.get('subject', '')}")
-        out(compact(hist.render(rec, body, labels=labels), 900))
+        out(compact(render_clean(ws, hist, rec, body, labels=labels), 900))
         out(f"\n=> proposed: {', '.join(lab['labels'])}  (conf {conf}, {lab.get('source')}): {lab.get('reason', '')}")
         out(menu)
         ans = input_fn("> ").strip().lower()

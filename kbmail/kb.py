@@ -5,8 +5,13 @@ Unit of work = thread (Outlook conversation / Teams chat). A thread is
 
   kbmail kb prepare  -> work/kb_select/batch_NNN.md       (Copilot: /kb-select)
   kbmail kb import   -> state/kb_selection.json
-  kbmail kb convert  -> work/convert/<thread>/thread.md   (markitdown + images + redaction)
-                        work/convert/QUEUE.md             (Copilot: /kb-format -> raw/...)
+  kbmail kb convert  -> work/convert/<thread>/thread.md   (markitdown + images + cleanup + redaction)
+                        work/convert/QUEUE.md             (Copilot: /kb-format -> <thread>/summary.md)
+  kbmail kb assemble -> raw/...                           (front matter + summary + the conversation)
+
+Copilot writes only the judgement part of a raw file (summary, key points, action items, open
+questions). The conversation and attachments are copied in by kbmail, so Copilot neither spends
+output tokens retyping them nor gets a chance to change a fact while copying.
 """
 
 from __future__ import annotations
@@ -30,9 +35,10 @@ from kbmail.convert import (
 from kbmail.convert import session as convert_session
 from kbmail.history import History
 from kbmail.labels import load_labels
+from kbmail.noise import render_clean
 from kbmail.records import fmt_people, fmt_person, message_index, read_message, threads
 from kbmail.redact import redact
-from kbmail.textutil import compact, now_iso, parse_frontmatter, short_hash, slugify
+from kbmail.textutil import compact, dump_frontmatter, now_iso, parse_frontmatter, short_hash, slugify
 from kbmail.workspace import OTHERS, Workspace
 
 SELECTION = "state/kb_selection.json"
@@ -41,6 +47,10 @@ CONVERTED = "state/kb_convert.json"
 SELECT_DIR = "work/kb_select"
 CONVERT_DIR = "work/convert"
 IMG_MARK = "[[IMAGE:{}]]"
+SUMMARY = "summary.md"  # per thread in CONVERT_DIR: what /kb-format writes
+GENERATED_MARK = (
+    "<!-- kbmail: everything below is generated from the mail by `kbmail kb assemble`; edit only the part above -->"
+)
 
 
 def _thread_areas(ws: Workspace, msgs: list[dict], labels: dict) -> list[str]:
@@ -132,7 +142,7 @@ def prepare_select(ws: Workspace, batch_threads: int = 8, log=print) -> list[str
                     _, body = read_message(ws, m)
                 except FileNotFoundError:
                     body = ""
-                text = hist.render(m, body, scope=scope, seen=seen)
+                text = render_clean(ws, hist, m, body, scope=scope, seen=seen)
                 atts = [a["name"] for a in m.get("attachments") or [] if not a.get("inline")]
                 lines += [
                     f"### {m['id']} | {m.get('date', '')[:16]} | {fmt_person(m.get('from'))}",
@@ -242,7 +252,7 @@ def _convert_message(ws: Workspace, reg: dict, tid: str, m: dict, quoting: dict,
         text = ANY_IMG_RE.sub("", text)  # remote images (tracking pixels, logos)
     else:
         text = body
-    text = quoting["history"].render(m, text, scope=quoting["scope"], seen=quoting["seen"])
+    text = render_clean(ws, quoting["history"], m, text, scope=quoting["scope"], seen=quoting["seen"])
 
     def _inline(mm):  # register only inline images that survive (own text, quoted text not exported)
         f = cid_files[mm.group(1)]
@@ -383,6 +393,51 @@ def is_formatted(ws: Workspace, entry: dict) -> bool:
     return str(meta.get("source_version", "")) == entry["signature"]
 
 
+def _render_thread(ws: Workspace, reg: dict, tid: str, e: dict) -> tuple[str, list[str]] | None:
+    """thread.md = thread.src.md with image descriptions / Mermaid in place; and the images still pending."""
+    src = ws.path(CONVERT_DIR, tid, "thread.src.md")
+    if not src.exists():
+        return None
+    text = src.read_text(encoding="utf-8")
+    pending = [i for i in e.get("images", []) if not imgs.is_resolved(reg, i)]
+    for iid in e.get("images", []):
+        text = text.replace(IMG_MARK.format(iid), imgs.render(ws, reg, iid))
+    ws.path(CONVERT_DIR, tid, "thread.md").write_text(text, encoding="utf-8")
+    return text, pending
+
+
+def _head_of(raw_body: str) -> str:
+    """The part of a raw file Copilot wrote (summary, key points, ...), without the title line.
+
+    Raw files from earlier versions were written whole by Copilot: there the head ends at
+    `## Conversation`, and a trailing `## Open questions` section belongs to it too."""
+    if GENERATED_MARK in raw_body:
+        head = raw_body.split(GENERATED_MARK, 1)[0]
+    else:
+        m = re.search(r"^## Conversation\s*$", raw_body, re.M)
+        head = raw_body[: m.start()] if m else raw_body
+        oq = re.search(r"^## Open questions\s*$.*?(?=^## |\Z)", raw_body[m.end() :] if m else "", re.M | re.S)
+        if oq:
+            head = head.rstrip() + "\n\n" + oq.group(0)
+    return re.sub(r"\A\s*# [^\n]*\n", "", head).strip()
+
+
+def _prefill_summary(ws: Workspace, tid: str, e: dict) -> list[str]:
+    """For a thread whose raw file exists: copy its summary into summary.md; return the new message ids."""
+    raw = ws.path(e["raw_target"])
+    if not raw.exists():
+        return []
+    meta, body = parse_frontmatter(raw.read_text(encoding="utf-8"))
+    new_ids = [i for i in e.get("message_ids", []) if i not in set(meta.get("message_ids") or [])]
+    p = ws.path(CONVERT_DIR, tid, SUMMARY)
+    if not p.exists():
+        head = {"title": meta.get("title") or e.get("title", ""), "topics": meta.get("topics") or []}
+        text = dump_frontmatter(head, _head_of(body))
+        p.write_text(text, encoding="utf-8")
+        e["summary_prefill"] = short_hash(text)
+    return new_ids
+
+
 def write_queue(ws: Workspace, log=print) -> dict:
     """Render thread.md for unformatted threads and list the ones ready for /kb-format."""
     conv = ws.load_json(CONVERTED, {})
@@ -397,35 +452,37 @@ def write_queue(ws: Workspace, log=print) -> dict:
             done += 1
             continue
         e["formatted"] = False
-        src = ws.path(CONVERT_DIR, tid, "thread.src.md")
-        if not src.exists():
+        rendered = _render_thread(ws, reg, tid, e)
+        if rendered is None:
             continue
-        text = src.read_text(encoding="utf-8")
-        pending = [i for i in e.get("images", []) if not imgs.is_resolved(reg, i)]
-        for iid in e.get("images", []):
-            text = text.replace(IMG_MARK.format(iid), imgs.render(ws, reg, iid))
-        ws.path(CONVERT_DIR, tid, "thread.md").write_text(text, encoding="utf-8")
-        (blocked if pending else ready).append((tid, e, pending))
+        pending = rendered[1]
+        if pending:
+            blocked.append((tid, e, pending))
+        else:
+            ready.append((tid, e, _prefill_summary(ws, tid, e)))
     ws.save_json(CONVERTED, conv)
     lines = [
         "# Format queue",
         "",
         f"Generated {now_iso()} by `kbmail kb convert` / `kbmail kb queue`.",
-        "Run `/kb-format` in Copilot Chat. For each READY thread: read `source`, write `target` "
-        "(see the prompt for the format) and copy `source_version` into the target's front matter.",
+        "Run `/kb-format` in Copilot Chat. For each READY thread: read the thread, write its `summary.md` "
+        "(summary, key points, action items, open questions; no conversation), then run `kbmail kb assemble`. "
+        "kbmail builds the raw/ file from the summary and the mail itself.",
         "",
         f"## Ready ({len(ready)})",
         "",
     ]
-    for tid, e, _ in ready:
-        exists = ws.path(e["raw_target"]).exists()
-        lines += [
-            f"- thread `{tid}`: {e.get('title', '')}",
-            f"  - source: `{CONVERT_DIR}/{tid}/thread.md`",
-            f"  - target: `{e['raw_target']}`" + (" (exists: UPDATE it, keep earlier content)" if exists else ""),
-            f"  - source_version: `{e['signature']}`",
-            f"  - areas: {', '.join(e.get('areas', []))}",
-        ]
+    for tid, e, new_ids in ready:
+        d = f"{CONVERT_DIR}/{tid}"
+        lines.append(f"- thread `{tid}`: {e.get('title', '')} (areas: {', '.join(e.get('areas', []))})")
+        if ws.path(e["raw_target"]).exists():
+            only = f", only the new messages: {', '.join(new_ids)}" if new_ids else ""
+            lines += [
+                f"  - read: `{d}/thread.md`{only}",
+                f"  - update: `{d}/{SUMMARY}` (holds the current summary; add what the new messages change)",
+            ]
+        else:
+            lines += [f"  - read: `{d}/thread.md`", f"  - write: `{d}/{SUMMARY}`"]
     lines += ["", f"## Blocked on image descriptions ({len(blocked)})", ""]
     for tid, e, pending in blocked:
         lines.append(f"- `{tid}` {e.get('title', '')}: waiting for {', '.join(pending)} (see review/images/REVIEW.md)")
@@ -435,6 +492,140 @@ def write_queue(ws: Workspace, log=print) -> dict:
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
     log(f"Format queue: {len(ready)} ready, {len(blocked)} blocked on images, {done} done -> {ws.rel(p)}")
     return {"ready": len(ready), "blocked": len(blocked), "formatted": done}
+
+
+# ---------------------------------------------------------------- raw assembly
+
+_POINTER_RE = re.compile(r"^\[quoted: .*(exported separately|same text as in message).*\]$")
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+_META_RE = re.compile(r"^- (date|from|to|cc|subject): ?(.*)$")
+_SECTION_RE = re.compile(r"^## (Summary|Key points)\s*$\n(.*?)(?=^## |\Z)", re.M | re.S)
+
+
+def _conversation(thread_md: str) -> str:
+    """thread.md as the raw file's `## Conversation`: one `###` entry per message, headings below it
+    demoted, pointers to text that is already in the thread dropped."""
+    out: list[str] = []
+    lines = thread_md.splitlines()
+    i = next((k for k, ln in enumerate(lines) if ln.startswith("## Message ")), len(lines))
+    fence, prev_subject = False, ""
+    while i < len(lines):
+        ln = lines[i]
+        i += 1
+        if _FENCE_RE.match(ln):
+            fence = not fence
+        elif not fence and ln.startswith("## Message "):
+            mid, meta = ln[len("## Message ") :].strip(), {}
+            while i < len(lines) and (not lines[i].strip() or _META_RE.match(lines[i])) and len(meta) < 5:
+                if m := _META_RE.match(lines[i]):
+                    meta[m.group(1)] = m.group(2)
+                elif meta:
+                    break  # blank line after the header block
+                i += 1
+            out += ["", f"### {meta.get('date', '')[:16].replace('T', ' ')} · {meta.get('from', '')} ({mid})", ""]
+            to = f"to: {meta.get('to', '')}" + (f"; cc: {meta['cc']}" if meta.get("cc") else "")
+            out.append(to)
+            subj = meta.get("subject", "")
+            if slugify(subj) != slugify(prev_subject):
+                out.append(f"subject: {subj}")
+            prev_subject = subj
+            out.append("")
+            continue
+        elif not fence and ln.startswith("### Attachment: "):
+            out.append("#" + ln)
+            continue
+        elif not fence and (h := re.match(r"^(#{1,6})\s", ln)):
+            ln = "#" * min(6, 4 + len(h.group(1))) + ln[len(h.group(1)) :]
+        elif not fence and _POINTER_RE.match(ln.strip()):
+            continue
+        out.append(ln)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
+def _participants(msgs: list[dict]) -> list[str]:
+    """Everyone on the thread, once per address; with a display name when any message has one."""
+    seen: dict[str, dict] = {}
+    for m in msgs:
+        for p in [m.get("from") or {}, *(m.get("to") or []), *(m.get("cc") or [])]:
+            key = (p.get("email") or p.get("name") or "").lower()
+            if key and (key not in seen or (p.get("name") and not seen[key].get("name"))):
+                seen[key] = p
+    return [fmt_person(p) for p in seen.values()]
+
+
+def _read_summary(ws: Workspace, path: Path) -> tuple[dict, str, str | None]:
+    """summary.md -> (front matter, body, error)."""
+    meta, body = parse_frontmatter(path.read_text(encoding="utf-8"))
+    if m := re.match(r"\A\s*# ([^\n]+)\n", body):
+        meta.setdefault("title", m.group(1).strip())
+        body = body[m.end() :]
+    body = body.strip()
+    if GENERATED_MARK in body or re.search(r"^## (Conversation|Message |Attachments?\b)", body, re.M):
+        return meta, body, "contains the conversation or attachments; write only the summary (kbmail adds the rest)"
+    sections = {m.group(1): m.group(2).strip() for m in _SECTION_RE.finditer(body)}
+    if not sections.get("Summary"):
+        return meta, body, "needs a non-empty `## Summary` section"
+    if "Key points" not in sections:
+        return meta, body, "needs a `## Key points` section (write `- none` if there are none)"
+    return meta, body, None
+
+
+def assemble(ws: Workspace, log=print) -> dict:
+    """Build raw/ files from Copilot's summary.md and the converted thread (`kbmail kb assemble`)."""
+    conv = ws.load_json(CONVERTED, {})
+    sel = ws.load_json(SELECTION, {})
+    reg = imgs.load(ws)
+    index = message_index(ws)
+    stats = {"assembled": 0, "errors": 0, "waiting": 0}
+    for tid, e in conv.items():
+        sp = ws.path(CONVERT_DIR, tid, SUMMARY)
+        if not sp.exists() or sel.get(tid, {}).get("decision") != "select" or is_formatted(ws, e):
+            continue
+        rendered = _render_thread(ws, reg, tid, e)
+        if rendered is None:
+            continue
+        text, pending = rendered
+        if pending:
+            stats["waiting"] += 1
+            log(f"  {tid}: waiting for image descriptions ({', '.join(pending)}); not assembled yet.")
+            continue
+        if e.get("summary_prefill") and short_hash(sp.read_text(encoding="utf-8")) == e["summary_prefill"]:
+            stats["errors"] += 1
+            log(f"  {tid}: {ws.rel(sp)} is still the previous summary; update it for the new messages first.")
+            continue
+        meta, body, err = _read_summary(ws, sp)
+        if err:
+            stats["errors"] += 1
+            log(f"  {tid}: {ws.rel(sp)} {err}.")
+            continue
+        if ws.cfg("privacy.redact", True):
+            body, _ = redact(body, ws.cfg("privacy.extra_patterns", []))
+        msgs = [r for i in e.get("message_ids", []) if (r := index.get(i))]
+        title = str(meta.get("title") or e.get("title") or (msgs[-1].get("subject", "") if msgs else tid)).strip()
+        topics = meta.get("topics") or sel.get(tid, {}).get("topics") or []
+        front = {
+            "title": title,
+            "thread": tid,
+            "source_version": e["signature"],
+            "areas": e.get("areas", []),
+            "topics": topics,
+            "period": f"{msgs[0].get('date', '')[:10]} .. {msgs[-1].get('date', '')[:10]}" if msgs else "",
+            "participants": _participants(msgs),
+            "message_ids": e.get("message_ids", []),
+        }
+        doc = f"# {title}\n\n{body}\n\n{GENERATED_MARK}\n\n## Conversation\n\n{_conversation(text)}\n"
+        target = ws.path(e["raw_target"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(dump_frontmatter(front, doc), encoding="utf-8")
+        sp.unlink()  # the raw file holds it now; an update starts from there
+        e.pop("summary_prefill", None)
+        e["formatted"] = True
+        stats["assembled"] += 1
+    ws.save_json(CONVERTED, conv)
+    ws.record_run("kb_assemble", **stats)
+    log(f"Assembled {stats['assembled']} raw file(s); {stats['errors']} summary file(s) to fix.")
+    write_queue(ws, log=log)
+    return stats
 
 
 def status(ws: Workspace) -> dict:

@@ -61,7 +61,14 @@ DEFAULT_CONFIG: dict = {
             "(?i)(internal|public|confidential|restricted|highly restricted)",
         ],
     },
-    "labeling": {"batch_size": 40, "limit": None, "preview_chars": 1000, "rule_threshold": 2.0},
+    "labeling": {
+        "batch_size": 40,
+        "limit": None,
+        "preview_chars": 1000,
+        "rule_threshold": 2.0,
+        "inherit_thread": True,
+    },
+    "cleanup": {"boilerplate": True, "extra_patterns": []},
     "review": {"source": "proposed", "order": "confidence", "accept_above": None},
     "rules": {"refresh_every_days": 14, "refresh_after_new_confirmed": 50},
     "kb": {"include_auto_labels": True, "message_chars": 6000, "select_batch_threads": 8},
@@ -154,6 +161,10 @@ CONFIG_HELP: dict[str, str] = {
     "labeling.limit": "max messages to queue per `label prepare` (empty = all) (--limit)",
     "labeling.preview_chars": "preview per message in labeling batches (own text, then quoted mail not exported)",
     "labeling.rule_threshold": "default rule threshold if rules.yaml sets none",
+    "labeling.inherit_thread": "a reply in a mail thread whose confirmed labels all agree gets them without Copilot",
+    "cleanup.boilerplate": "drop signatures, disclaimers, external-sender banners and meeting-join blocks "
+    "before Copilot and raw/ see the text",
+    "cleanup.extra_patterns": "extra regexes; a paragraph matching one is dropped as boilerplate (YAML list)",
     "review.source": "proposed | auto | all (review --source)",
     "review.order": "confidence | date (review --order)",
     "review.accept_above": "bulk-confirm proposals with confidence >= X first (review --accept-above)",
@@ -560,9 +571,12 @@ _USER_OWNED = {
 
 
 # Files shipped by earlier versions and replaced since (prompt files -> skills,
-# copilot-instructions.md -> AGENTS.md). Removed on upgrade only if they are still ours.
+# copilot-instructions.md -> AGENTS.md, raw-template.md -> summary-template.md).
+# Removed on upgrade only if they are still ours.
 _OBSOLETE = {
     ".github/copilot-instructions.md": "# Copilot instructions for this kbmail workspace",
+    # /kb-format writes only summary.md now; kbmail assembles the raw file.
+    ".github/skills/kb-format/raw-template.md": "---\ntitle: <specific title>",
     **{
         f".github/prompts/{n}.prompt.md": "---"
         for n in (

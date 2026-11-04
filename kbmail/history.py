@@ -21,12 +21,13 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from kbmail.noise import strip_boilerplate, strip_join_blocks
 from kbmail.records import fmt_people, fmt_person, message_index, read_message
 from kbmail.textutil import normalize_subject, parse_dt, short_hash
 from kbmail.workspace import Workspace
 
 STATE = "state/history.json"
-_VERSION = 1
+_VERSION = 2  # 2: fingerprints of the text without signatures and disclaimers
 
 # ---------------------------------------------------------------- parsing
 
@@ -316,8 +317,10 @@ class History:
                     _, body = read_message(ws, rec)
                 except FileNotFoundError:
                     continue
-                own, _ = split(body)
-                fp = {"sig": sig, **fingerprint(own)}
+                own, _ = split(strip_join_blocks(body))
+                # Probe content, not the signature and disclaimer every mail of this sender ends with:
+                # those would match quotes of the sender's other mail.
+                fp = {"sig": sig, **fingerprint(strip_boilerplate(own))}
                 changed = True
             self.fps[rec["id"]] = fp
         changed |= set(cache) != set(self.fps)

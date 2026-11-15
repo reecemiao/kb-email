@@ -247,6 +247,31 @@ def test_wiki_lint_and_search(ws):
     assert "owned_by" in wiki.graph_mermaid(g, "systems/payment-api")
 
 
+def test_wiki_link_forms():
+    text = (
+        "[[people/a]] [[people/b|B]] [[people/c#Timeline]] [[people/d#^blk|D]]\n"
+        "| owner | [[people/e\\|E]] | [[people/f#Role\\|F]] |\n"
+        "[[people\\g]]"
+    )
+    assert wiki.LINK_RE.findall(text) == [*(f"people/{x}" for x in "abcdef"), "people\\g"]
+
+
+def test_wiki_lint_accepts_escaped_pipe_in_tables(ws):
+    meta = {"type": "area", "status": "active", "confidence": 0.8, "updated": "2026-10-01", "sources": []}
+    hub = dump_frontmatter(
+        {"title": "Payments", **meta},
+        "# Payments\n\n| person | role |\n|---|---|\n| [[people/sarah-tanaka\\|Sarah]] | owner |\n",
+    )
+    person = dump_frontmatter({"title": "Sarah Tanaka", **meta, "type": "person"}, "# Sarah\n")
+    ws.path("wiki/areas").mkdir(parents=True)
+    ws.path("wiki/people").mkdir(parents=True)
+    ws.path("wiki/areas/payments.md").write_text(hub, encoding="utf-8")
+    ws.path("wiki/people/sarah-tanaka.md").write_text(person, encoding="utf-8")
+    assert wiki.lint(ws, log=quiet)["broken_links"] == 0
+    edges = wiki.build_graph(ws)["edges"]
+    assert {"from": "areas/payments", "to": "people/sarah-tanaka", "type": "links_to"} in edges
+
+
 def test_frontmatter_roundtrip_unicode():
     meta, body = parse_frontmatter(
         dump_frontmatter({"subject": "Café billing", "to": [{"name": "José Núñez"}]}, "Grüße")

@@ -63,7 +63,7 @@ created: 2026-10-01
 updated: 2026-10-27
 sources:                     # raw files this page is compiled from (paths from workspace root)
   - raw/email/area1/2026-10-01_payment-api-cutover_t1a2b3c4d5e6.md
-relations:                   # typed edges of the knowledge graph
+relations:                   # typed edges; target is a plain path, no [[ ]] (unquoted, YAML reads it as a list)
   - {type: owned_by, target: people/sarah-tanaka, confidence: 0.9}
   - {type: depends_on, target: systems/billing-db, confidence: 0.7}
 superseded_by:               # only when status: superseded
@@ -110,7 +110,8 @@ One-paragraph summary (what it is, why it matters, current state).
 ```
 
 Links: `[[people/sarah-tanaka]]` or `[[people/sarah-tanaka|Sarah]]`, path relative to `wiki/` without
-`.md`. Every page must be linked from `wiki/index.md` and at least one other page.
+`.md`. Inside a table, escape the pipe: `[[people/sarah-tanaka\|Sarah]]`. Every page must be linked from
+`wiki/index.md` and at least one other page.
 
 ## 7. People pages (relationships)
 

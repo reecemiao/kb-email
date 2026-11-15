@@ -44,7 +44,9 @@ AUDIT = "state/wiki_audit.jsonl"
 RAW_TEXT = {".md", ".txt"}
 SPECIAL_PAGES = {"index.md", "log.md", "SCHEMA.md"}
 REQUIRED = ("title", "type", "status", "confidence", "sources", "updated")
-LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
+# [[target]], [[target#heading]], [[target|text]]. Inside a Markdown table the alias pipe must be
+# escaped as [[target\|text]], so `\|` also ends the target.
+LINK_RE = re.compile(r"\[\[((?:[^\]|#\\]|\\(?!\|))+)(?:#[^\]|]*?)?(?:\\?\|[^\]]*)?\]\]")
 
 
 # ---------------------------------------------------------------- raw drop-zone import

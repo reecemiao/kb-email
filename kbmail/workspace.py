@@ -66,6 +66,8 @@ DEFAULT_CONFIG: dict = {
         "preview_chars": 1000,
         "rule_threshold": 2.0,
         "inherit_thread": True,
+        "discover_threads": 150,
+        "discover_preview_chars": 200,
     },
     "cleanup": {"boilerplate": True, "extra_patterns": []},
     "review": {"source": "proposed", "order": "confidence", "accept_above": None},
@@ -161,6 +163,8 @@ CONFIG_HELP: dict[str, str] = {
     "labeling.preview_chars": "preview per message in labeling batches (own text, then quoted mail not exported)",
     "labeling.rule_threshold": "default rule threshold if rules.yaml sets none",
     "labeling.inherit_thread": "a reply in a mail thread whose confirmed labels all agree gets them without Copilot",
+    "labeling.discover_threads": "threads in the digest Copilot proposes areas from (areas discover --threads)",
+    "labeling.discover_preview_chars": "preview per thread in that digest",
     "cleanup.boilerplate": "drop signatures, disclaimers, external-sender banners and meeting-join blocks "
     "before Copilot and raw/ see the text",
     "cleanup.extra_patterns": "extra regexes; a paragraph matching one is dropped as boilerplate (YAML list)",

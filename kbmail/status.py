@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from kbmail import images, kb, questions, rules, wiki
+from kbmail import areas, images, kb, questions, rules, wiki
 from kbmail.labels import label_counts, load_labels
 from kbmail.records import calendar_index, message_index
 from kbmail.textutil import parse_dt
@@ -34,6 +34,7 @@ def collect(ws: Workspace) -> dict:
     last_export = parse_dt(runs.get("export_mail"))
     s = {
         "messages": len(index),
+        "areas": areas.status(ws),
         "calendar_events": len(calendar_index(ws)),
         "labels": lab,
         "unlabeled": unlabeled,
@@ -78,11 +79,27 @@ def warnings(ws: Workspace, s: dict) -> list[str]:
 
 def next_actions(ws: Workspace, s: dict) -> list[str]:
     out = warnings(ws, s)
-    if not ws.areas:
-        out.append("Edit kbmail.yaml: set `me.emails` and the list of `areas`.")
+    ar = s["areas"]
+    if not ws.me_emails:
+        out.append("Edit kbmail.yaml: set `me.emails` (all your addresses).")
+    if ar["result_ready"]:
+        out.append("Import Copilot's area proposals: `kbmail areas import`.")
+    elif not ar["configured"] and ar["proposals"]:
+        out.append(
+            f"Pick areas from {ar['proposals']} proposal(s): `kbmail areas list`, then `kbmail areas pick 1 3 ...`."
+        )
+    elif not ar["configured"] and ar["digest"]:
+        out.append("Copilot: run `/kb-areas` (proposes areas from work/areas/DISCOVER.md).")
+    elif not ar["configured"]:
+        out.append(
+            "No areas yet: write them in kbmail.yaml `areas`, or let Copilot propose them from your mail "
+            "(after the export): `kbmail areas discover`, then `/kb-areas`."
+        )
     if s["messages"] == 0:
         out.append("Export mail: `kbmail export --days 30` (Windows/Outlook) or `kbmail import-eml <folder>`.")
         return out
+    if not ar["configured"]:
+        return out  # labeling and everything after it needs areas
     if s["label_results_ready"]:
         out.append(
             f"Import Copilot labels: `kbmail label import` ({len(s['label_results_ready'])} result file(s) ready)."

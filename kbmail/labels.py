@@ -157,8 +157,15 @@ def _area_block(ws: Workspace) -> list[str]:
 
 
 def prepare_batches(ws: Workspace, batch_size: int | None = None, limit: int | None = None, log=print) -> list[str]:
+    from kbmail.areas import configured_areas
     from kbmail.rules import classify, features, load_rules
 
+    if not configured_areas(ws):
+        log(
+            "No areas to label into yet. Write them in kbmail.yaml `areas`, or let Copilot propose them from "
+            "your mail: `kbmail areas discover`, then /kb-areas."
+        )
+        return []
     batch_size = batch_size or ws.cfg("labeling.batch_size", 40)
     preview = ws.cfg("labeling.preview_chars", 700)
     labels = load_labels(ws)

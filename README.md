@@ -51,7 +51,8 @@ kbmail init C:\kb               # creates your private workspace (config, skills
 when dependencies change). Then run `kbmail init C:\kb --upgrade` to refresh the workspace's skills,
 agent, hook and schema (your config and wiki pages are never overwritten).
 
-Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords, `copilot.vision`), then open
+Edit `C:\kb\kbmail.yaml` (`me.emails`, `areas` with descriptions/keywords or leave them for Copilot to
+propose from your mail, `copilot.vision`), then open
 `C:\kb` in VS Code. In the Chat view, pick the **KB Librarian** agent and type `/kb-start`; Copilot
 walks you through the first run.
 
@@ -190,16 +191,17 @@ variables, kbmail warns and you can move those settings into `kbmail.yaml`.
 | # | what | who | command / skill |
 |---|---|---|---|
 | 1 | Export mail + calendar for the last *n* days. Default: Inbox + Sent Items, subfolders skipped | kbmail | `kbmail export --days 30` (`--include-subfolders`, `--all-folders`, `--folder "Inbox/Projects"`, `--no-calendar`) |
-| 2 | Rough labeling into your areas + `others` | Copilot | `kbmail label prepare` → `/kb-label` → `kbmail label import` |
-| 3 | Confirm or correct every label | you | `kbmail review` (Enter = accept, `1,2` = set areas, `v` view, `b` back, `q` quit) or `kbmail review export-csv` / `import-csv` for Excel |
-| 4 | Turn confirmed labels into deterministic rules | Copilot | `kbmail rules prepare` → `/kb-rules` (edits `config/rules.yaml`, iterates with `kbmail rules evaluate`, then `kbmail rules commit`) |
-| 5 | Pick threads with durable knowledge | Copilot | `kbmail kb prepare` → `/kb-select` → `kbmail kb import` |
-| 6 | Convert selected mail + attachments (markitdown), summarize them; kbmail builds the `raw/` file | kbmail + Copilot | `kbmail kb convert` → `/kb-format` (writes `summary.md`) → `kbmail kb assemble` |
-| 7 | Images: vision **off** → you describe them in `review/images/descriptions.yaml` (preview `REVIEW.md`), vision **on** → `/kb-images`. SVGs: kbmail converts draw.io exports and simple box-and-arrow diagrams to Mermaid itself and skips icons; for the rest `/kb-svg` works from a text digest (no vision needed) | you / Copilot | `kbmail images import` (or `kbmail images describe`); `kbmail svg2mermaid <file>` for any SVG |
-| 8 | Answer what Copilot didn't understand; give links to documentation | you | edit `review/questions.yaml` (or `kbmail questions answer`), then `kbmail questions ingest` (fetches URLs into `raw/web/`). Drop your own documents into `raw/inbox/` → `kbmail raw import` |
-| 9 | Build the wiki (LLM Wiki v2: tiers, confidence, supersession, typed graph) | Copilot | `kbmail wiki queue` → `/kb-wiki-ingest` → `kbmail wiki lint` → `/kb-wiki-lint` |
-| 10 | Draft mail on a topic / reply to a message; get suggestions of what to send or answer | Copilot | `/kb-style` once; then `/kb-draft`, `/kb-suggest` (uses `kbmail triage`), `kbmail draft-outlook drafts/x.md` puts a draft in Outlook (never sends) |
-| 11 | Infer people and relationships. Optional: titles, departments and reporting lines from the corporate directory (LDAP/AD, [docs/directory.md](docs/directory.md)) | kbmail + Copilot | `kbmail directory sync` (optional) → `kbmail people build` → `/kb-people` (corrections in `config/people.yaml`) |
+| 2 | Areas, if you didn't list them in `kbmail.yaml`: Copilot proposes topics from a digest of your busiest threads, you pick the ones to keep | Copilot + you | `kbmail areas discover` → `/kb-areas` → `kbmail areas pick 1 3 5` (writes them into `kbmail.yaml`) |
+| 3 | Rough labeling into your areas + `others` | Copilot | `kbmail label prepare` → `/kb-label` → `kbmail label import` |
+| 4 | Confirm or correct every label | you | `kbmail review` (Enter = accept, `1,2` = set areas, `v` view, `b` back, `q` quit) or `kbmail review export-csv` / `import-csv` for Excel |
+| 5 | Turn confirmed labels into deterministic rules | Copilot | `kbmail rules prepare` → `/kb-rules` (edits `config/rules.yaml`, iterates with `kbmail rules evaluate`, then `kbmail rules commit`) |
+| 6 | Pick threads with durable knowledge | Copilot | `kbmail kb prepare` → `/kb-select` → `kbmail kb import` |
+| 7 | Convert selected mail + attachments (markitdown), summarize them; kbmail builds the `raw/` file | kbmail + Copilot | `kbmail kb convert` → `/kb-format` (writes `summary.md`) → `kbmail kb assemble` |
+| 8 | Images: vision **off** → you describe them in `review/images/descriptions.yaml` (preview `REVIEW.md`), vision **on** → `/kb-images`. SVGs: kbmail converts draw.io exports and simple box-and-arrow diagrams to Mermaid itself and skips icons; for the rest `/kb-svg` works from a text digest (no vision needed) | you / Copilot | `kbmail images import` (or `kbmail images describe`); `kbmail svg2mermaid <file>` for any SVG |
+| 9 | Answer what Copilot didn't understand; give links to documentation | you | edit `review/questions.yaml` (or `kbmail questions answer`), then `kbmail questions ingest` (fetches URLs into `raw/web/`). Drop your own documents into `raw/inbox/` → `kbmail raw import` |
+| 10 | Build the wiki (LLM Wiki v2: tiers, confidence, supersession, typed graph) | Copilot | `kbmail wiki queue` → `/kb-wiki-ingest` → `kbmail wiki lint` → `/kb-wiki-lint` |
+| 11 | Draft mail on a topic / reply to a message; get suggestions of what to send or answer | Copilot | `/kb-style` once; then `/kb-draft`, `/kb-suggest` (uses `kbmail triage`), `kbmail draft-outlook drafts/x.md` puts a draft in Outlook (never sends) |
+| 12 | Infer people and relationships. Optional: titles, departments and reporting lines from the corporate directory (LDAP/AD, [docs/directory.md](docs/directory.md)) | kbmail + Copilot | `kbmail directory sync` (optional) → `kbmail people build` → `/kb-people` (corrections in `config/people.yaml`) |
 
 `kbmail status` shows at any time what is done and the next action. `/kb-ask` answers questions from
 the wiki with citations and can file good answers back into it.

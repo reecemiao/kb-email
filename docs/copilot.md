@@ -29,6 +29,7 @@ Use **Chat: Open Customizations** to see everything VS Code loaded. Right-click 
 |---|---|
 | `/kb-start` | guided first run (manual only: `disable-model-invocation`) |
 | `/kb-sync` | delta run: `kbmail sync`, then every due queue |
+| `/kb-areas` | propose areas from a mail digest; the user picks them (`kbmail areas pick`) |
 | `/kb-label` | label batches → `*.result.jsonl` |
 | `/kb-rules` | write/refresh `config/rules.yaml`, evaluate, commit, journal |
 | `/kb-select` | choose KB threads, raise questions |

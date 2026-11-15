@@ -9,6 +9,8 @@ me:
 
 # The areas you want mail sorted into. Everything else becomes "others".
 # A good description + keywords make Copilot's first labeling pass much better.
+# Or leave the placeholders and let Copilot propose areas from your mail after the export:
+# `kbmail areas discover`, then /kb-areas, then `kbmail areas pick` writes your choice here.
 areas:
   - name: area1
     description: "Replace with a one-line description of this area"

@@ -49,6 +49,9 @@ Commands that change state wait for each other, so never run two kbmail commands
 
 | command | what it does |
 |---|---|
+| `kbmail areas discover [--threads N]` | write `work/areas/DISCOVER.md`, a thread digest Copilot proposes areas from (`/kb-areas`) |
+| `kbmail areas import` / `kbmail areas list` | validate and number `work/areas/proposals.result.jsonl` / show the proposals |
+| `kbmail areas pick <numbers or names>... [--all] [--replace]` | write the chosen proposals into `kbmail.yaml` `areas` (added to the existing ones unless `--replace`) |
 | `kbmail label prepare [--batch-size N] [--limit N]` | label replies like their confirmed thread, then write `work/labeling/batch_NNN.md` for the rest |
 | `kbmail label import` | validate and import `*.result.jsonl` |
 | `kbmail label apply-rules` / `kbmail label counts` | apply rules to unlabeled mail / label counts by status |

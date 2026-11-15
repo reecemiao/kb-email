@@ -185,6 +185,23 @@ def cmd_label(args):
         print(labels.label_counts(ws))
 
 
+def cmd_areas(args):
+    from kbmail import areas
+
+    ws = _ws(args)
+    if args.action == "discover":
+        areas.discover(ws, args.threads)
+        return 0
+    if args.action == "import":
+        return 1 if areas.import_proposals(ws)["errors"] else 0
+    if args.action == "list":
+        print("\n".join(areas.format_proposals(ws)))
+        return 0
+    interactive = not args.names and not args.all and sys.stdin.isatty()
+    picked = areas.pick(ws, args.names, args.all, args.replace, input_fn=input if interactive else None)
+    return 0 if picked else 1
+
+
 def cmd_review(args):
     from kbmail import labels
 
@@ -553,6 +570,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--area")
     s.set_defaults(func=cmd_mail)
 
+    s = sub.add_parser("areas", help="let Copilot propose areas from your mail, then pick them into kbmail.yaml")
+    s.add_argument("action", choices=["discover", "import", "list", "pick"])
+    s.add_argument("names", nargs="*", help="(pick) proposal numbers or names, e.g. 1 3 payments")
+    s.add_argument("--all", action="store_true", help="(pick) keep every proposal")
+    s.add_argument("--replace", action="store_true", help="(pick) drop the areas already in kbmail.yaml")
+    s.add_argument("--threads", type=int, help="(discover) threads in the digest (default: labeling.discover_threads)")
+    s.set_defaults(func=cmd_areas)
+
     s = sub.add_parser("label", help="labeling batches for Copilot")
     s.add_argument("action", choices=["prepare", "import", "apply-rules", "counts"])
     s.add_argument("--batch-size", type=int, help="messages per batch (default: labeling.batch_size)")
@@ -690,7 +715,7 @@ def main(argv=None) -> int:
     args, extra = parser.parse_known_args(argv)
     # argparse consumes a trailing `nargs="*"` positional (as empty) before options such as --config,
     # so words after the options arrive here. Hand them to the command's list positional.
-    target = next((n for n in ("email", "paths", "text") if isinstance(getattr(args, n, None), list)), None)
+    target = next((n for n in ("email", "paths", "text", "names") if isinstance(getattr(args, n, None), list)), None)
     if extra and target and not any(x.startswith("-") for x in extra):
         getattr(args, target).extend(extra)
     elif extra:
@@ -719,6 +744,8 @@ def main(argv=None) -> int:
 _NO_LOCK = {"init", "status", "show", "history", "mail", "svg2mermaid", "hook", "config", "git"}
 _NO_LOCK_ACTIONS = {
     ("review", "interactive"),
+    ("areas", "list"),
+    ("areas", "pick"),  # may wait for the user's answer; takes the lock only to write kbmail.yaml
     ("label", "counts"),
     ("rules", "evaluate"),
     ("rules", "status"),

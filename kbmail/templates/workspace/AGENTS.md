@@ -8,7 +8,9 @@ chats. Python (`kbmail` CLI) does all deterministic work; you do the reading, ju
 - **The KB Librarian agent** (`.github/agents/kb-librarian.agent.md`) bundles these instructions with
   a tool set that has no web access. Prefer it for work in this folder.
 - **State:** a session-start hook (`.github/hooks/kbmail.json`) injects `kbmail status` when a session
-  starts. If you don't see that context, run `kbmail status`; it always says what is due next.
+  starts, as a block beginning `kbmail workspace ... state at session start`. Not every harness runs
+  the hook: if that block isn't in your context, run `kbmail status` before anything else. It always
+  says what is due next.
 - The `kbmail-cli` skill lists every command.
 
 ## Folder contract (who may write where)

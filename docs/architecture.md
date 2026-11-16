@@ -82,7 +82,7 @@ AGENTS.md                   always-on agent instructions (folder contract, priva
 .github/agents/             kb-librarian.agent.md (tools without web, handoffs)
 .github/hooks/kbmail.json   sessionStart -> `kbmail hook session-start` (status as context)
 .github/instructions/       raw.instructions.md, wiki.instructions.md (applyTo globs)
-.vscode/settings.json       Local-harness hooks on, auto-approves `kbmail` terminal commands
+.vscode/settings.json       Local harness: hooks on, auto-approves `kbmail` terminal commands
 README.md                   workspace guide, incl. version control (what is tracked and why)
 .gitignore, .gitattributes  kbmail-managed block (refreshed on upgrade) + your own rules
 .githooks/pre-commit        `kbmail git check --staged` (enable: `kbmail git setup`)

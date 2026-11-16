@@ -60,7 +60,8 @@ Requirements: Python 3.12+, classic Outlook desktop (the new WebView-based Outlo
 current VS Code with GitHub Copilot. Mail content is expected in English; headers and dates that
 English or Simplified Chinese Outlook, Gmail and Teams write (`发件人`/`发送时间`, `2026年7月30日 下午3:48`,
 `答复:`/`转发:`, `已接受:`) are recognized. Skills, the custom agent and `AGENTS.md` are picked up
-automatically, and the hook needs `kbmail` on PATH. The workspace is separate from this repo, so your
+automatically, and the hook needs `kbmail` on PATH. In VS Code's Copilot harness, approve `kbmail` once
+with **Always Allow** (see [Copilot harness](docs/copilot.md#copilot-harness)). The workspace is separate from this repo, so your
 mail never ends up in the tool's git history.
 Version the workspace in a *private* repo if you like; that also gives the wiki a full audit history.
 

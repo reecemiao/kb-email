@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -447,24 +448,64 @@ def cmd_teams(args):
             return 1
 
 
+HOOK_STDIN_TIMEOUT = 2.0  # seconds; a runtime that leaves stdin open must not stall the session
+
+
+def _read_all(stream) -> str:
+    # Read the file descriptor, not the buffered text object: the payload is UTF-8 whatever the
+    # Windows code page is, and a reader left blocked holds no buffer lock at interpreter exit.
+    try:
+        fd = stream.fileno()
+    except (AttributeError, OSError, ValueError):  # no real descriptor (io.StringIO in tests)
+        return stream.read()
+    chunks = []
+    while chunk := os.read(fd, 65536):
+        chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
+def _read_hook_payload() -> dict:
+    """The event JSON on stdin, or {} when there is none, it is not JSON, or stdin is never closed."""
+    import threading
+
+    stdin = sys.stdin
+    if stdin is None or stdin.isatty():
+        return {}
+    box: list[str] = []
+    reader = threading.Thread(target=lambda: box.append(_read_all(stdin)), daemon=True)
+    reader.start()
+    reader.join(HOOK_STDIN_TIMEOUT)
+    try:
+        payload = json.loads(box[0] or "{}") if box else {}
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def cmd_hook(args):
     """Agent hooks (.github/hooks/kbmail.json). Never fails: hooks must not break a session."""
     from kbmail.status import hook_context
 
-    payload = {}
     try:
-        if not sys.stdin.isatty():
-            payload = json.loads(sys.stdin.read() or "{}")
-    except (ValueError, OSError):
+        payload = _read_hook_payload()
+    except (OSError, ValueError):
         payload = {}
-    out = {}
     try:
-        cwd = payload.get("cwd") if isinstance(payload, dict) else None
-        ws = Workspace.find(args.workspace or cwd or None)
-        out = {"additionalContext": hook_context(ws)}
+        ws = Workspace.find(args.workspace or payload.get("cwd") or None)
+        context = hook_context(ws)
     except Exception as e:  # not a kbmail workspace, broken config, ...: add a hint, never an error
-        out = {"additionalContext": f"kbmail: status unavailable ({e}). Run `kbmail status` to check."}
-    print(json.dumps(out, ensure_ascii=False))
+        context = f"kbmail: status unavailable ({e}). Run `kbmail status` to check."
+    # The Copilot harness and Copilot CLI read a top-level `additionalContext`; the legacy Local
+    # harness reads `hookSpecificOutput`. Each ignores the other key. ASCII-only JSON, so the
+    # Windows console code page can neither break nor garble it.
+    print(
+        json.dumps(
+            {
+                "additionalContext": context,
+                "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context},
+            }
+        )
+    )
 
 
 def cmd_git(args):

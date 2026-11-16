@@ -13,7 +13,7 @@ differences between the harnesses are listed under [Copilot harness](#copilot-ha
 | `.github/skills/kb-*/SKILL.md` | one [agent skill](https://agentskills.io) per job, usable as `/kb-*` commands | the model also loads a skill on its own when the description matches the request |
 | `.github/skills/*/…` resources | `summary-template.md`, `draft-template.md`, `rules-format.md` | loaded only when the skill reaches that step |
 | `.github/skills/kbmail-cli/` | CLI reference | `user-invocable: false`: hidden from `/`, loaded when the model needs a command |
-| `.github/agents/kb-librarian.agent.md` | **KB Librarian** custom agent | tools `read, edit, search, execute, todo, agent, askQuestions`, **no `web`**; handoff buttons (Local) for sync, wiki update, what needs a reply |
+| `.github/agents/kb-librarian.agent.md` | **KB Librarian** custom agent | tools `read, edit, search, execute, todo, agent, skill, askQuestions`, **no `web`**; handoff buttons (Local) for sync, wiki update, what needs a reply |
 | `.github/hooks/kbmail.json` | `sessionStart` hook → `kbmail hook session-start` | injects `kbmail status` (counts + ordered next actions, warnings about failed or stale exports first) as context; fails open. Not run by the Copilot harness yet, see [Copilot harness](#copilot-harness) |
 | `.github/instructions/*.instructions.md` | `applyTo: raw/**` / `wiki/**` rules | attached automatically when those files are edited |
 | `.vscode/settings.json` | `chat.useHooks` (Local), terminal auto-approve for `kbmail` (Local) | remove the auto-approve entry to confirm every command |
@@ -52,10 +52,11 @@ skills work in every harness, appear as slash commands, and load their resources
 
 VS Code's **Copilot** harness (the Copilot SDK runtime that Copilot CLI also uses) replaces the
 deprecated **Local** harness, which is removed in February 2027. It loads `AGENTS.md`, the skills, the
-KB Librarian agent and the instructions files from the workspace. Three things differ from Local:
+KB Librarian agent and the instructions files from the workspace. These things differ from Local:
 
 | what | Local | Copilot harness | what kbmail does |
 |---|---|---|---|
+| `/kb-*` skills in the KB Librarian | work without listing a tool | skills load through the `skill` tool, and a custom agent's `tools:` list is an allowlist: without `skill` in it, the agent can't load any skill | the KB Librarian lists `skill`. If skills still aren't available, it reads `.github/skills/<name>/SKILL.md` directly, so "kb-sync" typed as plain text works too |
 | session-start hook | runs `.github/hooks/kbmail.json` | repository `sessionStart` hooks currently don't fire ([copilot-cli#1730](https://github.com/github/copilot-cli/issues/1730)) | without the hook's status block, AGENTS.md and the KB Librarian run `kbmail status` as their first step. `/kb-start` and `/kb-sync` get the status from their own commands either way |
 | `kbmail` auto-approve | `chat.tools.terminal.autoApprove` in `.vscode/settings.json` | workspace settings aren't applied; your **user** settings are | choose **Always Allow** for the `kbmail` prefix at the first prompt. VS Code saves it to your user settings, and later sessions don't ask |
 | handoff buttons | shown under the KB Librarian's replies | not supported | type `/kb-sync`, `/kb-wiki-ingest` or `/kb-suggest` instead |
@@ -65,6 +66,18 @@ harness, Copilot CLI) and `hookSpecificOutput.additionalContext` (Local). Once t
 repository hooks, the Copilot harness picks the status up with no change to the workspace.
 A quick check: if the KB Librarian's first step in a new session is `kbmail status`, the hook didn't
 run there.
+
+If `/kb-*` doesn't show up when you type `/`:
+
+1. Run `kbmail init <folder> --upgrade` (an older KB Librarian has no `skill` tool), then start a new
+   chat session.
+2. In a brand-new session the `/` list can stay incomplete until the first message. Send one (for
+   example "status") and type `/` again.
+3. Pick **Agent** instead of KB Librarian and type `/`. If the skills appear there, the agent file
+   is the problem: check **Chat: Open Customizations** for errors.
+4. If they appear nowhere, your organization may have turned off workspace skills in its Copilot
+   policy. The KB Librarian still works: ask it in plain words ("sync", "kb-label"), and it follows the
+   skill file directly.
 
 ## Typical session
 

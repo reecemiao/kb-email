@@ -4,7 +4,9 @@ This folder is a private knowledge workspace built from the user's Outlook mail,
 chats. Python (`kbmail` CLI) does all deterministic work; you do the reading, judging and writing.
 
 - **Skills** in `.github/skills/` describe each job and appear as `/kb-*` commands (for example
-  `/kb-sync`, `/kb-label`, `/kb-draft`). Load the matching skill before doing a job.
+  `/kb-sync`, `/kb-label`, `/kb-draft`). Load the matching skill before doing a job. If skills or
+  `/kb-*` commands aren't available in your session, read `.github/skills/<name>/SKILL.md` and
+  follow it the same way.
 - **The KB Librarian agent** (`.github/agents/kb-librarian.agent.md`) bundles these instructions with
   a tool set that has no web access. Prefer it for work in this folder.
 - **State:** a session-start hook (`.github/hooks/kbmail.json`) injects `kbmail status` when a session

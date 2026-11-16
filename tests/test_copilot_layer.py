@@ -54,6 +54,8 @@ def test_agent_hook_and_instructions(ws_root):
     meta, _ = parse_frontmatter((ws_root / ".github/agents/kb-librarian.agent.md").read_text(encoding="utf-8"))
     assert meta["name"] == "KB Librarian"
     assert "execute" in meta["tools"] and "web" not in meta["tools"]
+    # the Copilot harness treats `tools` as an allowlist and loads skills through the `skill` tool
+    assert "skill" in meta["tools"]
     assert all(h["agent"] == "KB Librarian" and h["prompt"].startswith("/kb-") for h in meta["handoffs"])
     assert (ws_root / "AGENTS.md").exists() and not (ws_root / ".github/copilot-instructions.md").exists()
     hook = json.loads((ws_root / ".github/hooks/kbmail.json").read_text(encoding="utf-8"))
@@ -120,7 +122,7 @@ def test_session_start_hook_with_a_non_utf8_code_page(tmp_path):
     assert f"kbmail workspace {root.resolve()}" in json.loads(res.stdout)["additionalContext"]
 
 
-def test_agent_runs_status_when_the_hook_context_is_missing(ws_root):
+def test_agent_works_without_hook_and_skills(ws_root):
     # The Copilot harness doesn't run repository sessionStart hooks yet: the agent must not rely on them.
     from kbmail.status import hook_context
     from kbmail.workspace import Workspace
@@ -130,6 +132,8 @@ def test_agent_runs_status_when_the_hook_context_is_missing(ws_root):
     for rel in ("AGENTS.md", ".github/agents/kb-librarian.agent.md"):
         text = " ".join((ws_root / rel).read_text(encoding="utf-8").split())
         assert marker in text and "run `kbmail status` before anything else" in text, rel
+        # and when skills aren't available, it follows the skill file directly
+        assert "read `.github/skills/<name>/SKILL.md`" in text, rel
 
 
 def test_upgrade_removes_old_prompt_files_but_keeps_user_ones(ws_root):

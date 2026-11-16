@@ -67,12 +67,69 @@ def test_session_start_hook_outputs_context(ws_root, capsys, monkeypatch):
 
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"cwd": str(ws_root), "source": "startup"})))
     assert main(["hook", "session-start"]) == 0
-    out = json.loads(capsys.readouterr().out)
+    raw = capsys.readouterr().out
+    assert raw.isascii()  # survives any Windows console code page
+    out = json.loads(raw)
     assert "Next actions" in out["additionalContext"] and "kbmail export" in out["additionalContext"]
+    # Copilot harness / Copilot CLI read the top-level key, the Local harness hookSpecificOutput
+    assert out["hookSpecificOutput"] == {"hookEventName": "SessionStart", "additionalContext": out["additionalContext"]}
     # outside a workspace it still returns valid JSON instead of failing the session
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"cwd": str(ws_root.parent)})))
     assert main(["hook", "session-start"]) == 0
     assert "status unavailable" in json.loads(capsys.readouterr().out)["additionalContext"]
+
+
+def test_session_start_hook_does_not_wait_for_an_open_stdin(ws_root, capsys, monkeypatch):
+    import threading
+
+    class OpenStdin:  # a runtime that never closes the hook's stdin
+        def isatty(self):
+            return False
+
+        def read(self):
+            threading.Event().wait(30)
+            return ""
+
+    monkeypatch.setattr("sys.stdin", OpenStdin())
+    monkeypatch.setattr("kbmail.cli.HOOK_STDIN_TIMEOUT", 0.1)
+    monkeypatch.chdir(ws_root)
+    assert main(["hook", "session-start"]) == 0
+    assert "Next actions" in json.loads(capsys.readouterr().out)["additionalContext"]
+
+
+def test_session_start_hook_with_a_non_utf8_code_page(tmp_path):
+    # A real pipe, a workspace path the console code page can't represent (Windows: cp1252, cp936...).
+    import os
+    import subprocess
+    import sys
+
+    root = tmp_path / "邮件-kb"
+    init_workspace(root)
+    env = {**os.environ, "PYTHONIOENCODING": "latin-1", "PYTHONUTF8": "0"}
+    env.pop("KBMAIL_WORKSPACE", None)
+    res = subprocess.run(
+        [sys.executable, "-m", "kbmail", "hook", "session-start"],
+        input=json.dumps({"cwd": str(root)}, ensure_ascii=False).encode("utf-8"),
+        capture_output=True,
+        cwd=tmp_path,
+        env=env,
+        timeout=60,
+    )
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.isascii()
+    assert f"kbmail workspace {root.resolve()}" in json.loads(res.stdout)["additionalContext"]
+
+
+def test_agent_runs_status_when_the_hook_context_is_missing(ws_root):
+    # The Copilot harness doesn't run repository sessionStart hooks yet: the agent must not rely on them.
+    from kbmail.status import hook_context
+    from kbmail.workspace import Workspace
+
+    marker = "state at session start"
+    assert marker in hook_context(Workspace(ws_root))
+    for rel in ("AGENTS.md", ".github/agents/kb-librarian.agent.md"):
+        text = " ".join((ws_root / rel).read_text(encoding="utf-8").split())
+        assert marker in text and "run `kbmail status` before anything else" in text, rel
 
 
 def test_upgrade_removes_old_prompt_files_but_keeps_user_ones(ws_root):

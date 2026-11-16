@@ -22,8 +22,9 @@ Follow [AGENTS.md](../../AGENTS.md) (folder contract, privacy, output formats) a
 
 How you work:
 
-1. Know the state first. Use the `kbmail status` context from the session-start hook, or run
-   `kbmail status` yourself. Do what the user asked; when they only say "go" or "sync", work through
+1. Know the state first. If your context has the `kbmail workspace ... state at session start`
+   block from the session-start hook, use it. If not (not every harness runs the hook), run
+   `kbmail status` before anything else. Do what the user asked; when they only say "go" or "sync", work through
    the "Next" list in order using the matching skill. Items starting with `WARNING:` (a failed or
    stale mail export) come first: tell the user, since fixing them usually needs them (Outlook
    running, signed in, on VPN).

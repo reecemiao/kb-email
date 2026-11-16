@@ -4,6 +4,8 @@
   // Local harness only: run repository hooks there too.
   "chat.useHooks": true,
   // Let agents run the kbmail CLI without asking each time. Remove to approve every command.
+  // Local harness only: the Copilot harness ignores workspace settings for approvals. There,
+  // choose "Always Allow" for `kbmail` at the first prompt (saved in your user settings).
   "chat.tools.terminal.autoApprove": {
     "kbmail": true
   },
